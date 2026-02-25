@@ -39,6 +39,7 @@ SHARED_APPS = (
     'apps.core',
 
     'django.contrib.contenttypes',
+    'corsheaders',
 )
 
 TENANT_APPS = (
@@ -68,6 +69,7 @@ REST_FRAMEWORK = {
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     "apps.core.middleware.ModuleAccessMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -81,6 +83,9 @@ MIDDLEWARE = [
 TENANT_MODEL = "tenants.Company"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
 
 TEMPLATES = [
     {

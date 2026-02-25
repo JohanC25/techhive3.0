@@ -11,7 +11,15 @@ from apps.tenants.views import CompanyListView
 
 def public_landing(request):
     return JsonResponse({
-        "page": "Public Landing Page"
+        "company": "My SaaS Platform",
+        "headline": "Manage Your Business Smarter",
+        "subheadline": "Multi-tenant inventory & sales management system",
+        "features": [
+            "Inventory Management",
+            "Sales Tracking",
+            "Role-Based Access",
+            "Analytics Dashboard"
+        ]
     })
 
 urlpatterns = [
