@@ -1,14 +1,20 @@
-# ----------------------
-# Django (Backend)
-# ----------------------
-backend/__pycache__/
-backend/*.pyc
-backend/db.sqlite3
-backend/.env
-backend/venv/
-backend/env/
+# ======================
+# PYTHON / DJANGO
+# ======================
+__pycache__/
+*.py[cod]
+*.sqlite3
 
-# Django static/media (if generated)
+# Entornos
+venv/
+env/
+.venv/
+
+# Variables de entorno
+.env
+backend/.env
+
+# Archivos generados
 backend/staticfiles/
 backend/media/
 

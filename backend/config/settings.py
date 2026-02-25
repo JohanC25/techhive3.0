@@ -29,29 +29,42 @@ SECRET_KEY = 'django-insecure-_-pqk%2vh0+$w7iav9&tf+0)!xrc+dk&6#91a&lh(=gl!@#v*)
 DEBUG = True
 
 ALLOWED_HOSTS = []
-
+PUBLIC_SCHEMA_URLCONF = "config.public_urls"
+ROOT_URLCONF = "config.tenant_urls"
 
 # Application definition
 SHARED_APPS = (
     'django_tenants',
     'apps.tenants',
     'apps.core',
+
     'django.contrib.contenttypes',
+)
+
+TENANT_APPS = (
     'django.contrib.auth',
     'django.contrib.sessions',
     'django.contrib.admin',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-)
 
-TENANT_APPS = (
     'rest_framework',
+    'rest_framework_simplejwt',
+
     'apps.users',
     'apps.modules.sales',
     'apps.modules.inventory',
 )
 
-INSTALLED_APPS = SHARED_APPS + TENANT_APPS
+INSTALLED_APPS = SHARED_APPS + tuple(
+    app for app in TENANT_APPS if app not in SHARED_APPS
+)
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+}
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
@@ -68,7 +81,6 @@ MIDDLEWARE = [
 TENANT_MODEL = "tenants.Company"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
 
-ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [
     {
@@ -141,3 +153,5 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = 'static/'
+
+PUBLIC_SCHEMA_NAME = "public"
