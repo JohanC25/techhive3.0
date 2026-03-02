@@ -31,4 +31,5 @@ urlpatterns = [
     # Auth endpoints
     path("api/login/", TokenObtainPairView.as_view(), name="login"),
     path("api/refresh/", TokenRefreshView.as_view(), name="refresh"),
+    path('api/chatbot/', include('apps.chatbot.urls')),
 ]

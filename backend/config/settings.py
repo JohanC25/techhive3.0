@@ -54,6 +54,7 @@ TENANT_APPS = (
     'apps.users',
     'apps.modules.sales',
     'apps.modules.inventory',
+    'apps.chatbot.apps.ChatbotConfig',
 )
 
 INSTALLED_APPS = SHARED_APPS + tuple(
