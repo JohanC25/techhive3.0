@@ -28,7 +28,7 @@ SECRET_KEY = 'django-insecure-_-pqk%2vh0+$w7iav9&tf+0)!xrc+dk&6#91a&lh(=gl!@#v*)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 PUBLIC_SCHEMA_URLCONF = "config.public_urls"
 ROOT_URLCONF = "config.tenant_urls"
 
@@ -54,6 +54,10 @@ TENANT_APPS = (
     'apps.users',
     'apps.modules.sales',
     'apps.modules.inventory',
+    'apps.modules.purchases',
+    'apps.modules.cash_management',
+    'apps.modules.technical_service',
+    'apps.modules.reports',
     'apps.chatbot.apps.ChatbotConfig',
 )
 
@@ -61,10 +65,14 @@ INSTALLED_APPS = SHARED_APPS + tuple(
     app for app in TENANT_APPS if app not in SHARED_APPS
 )
 
+AUTH_USER_MODEL = 'users.User'
+
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
 
 MIDDLEWARE = [
@@ -141,9 +149,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Guayaquil'
 
 USE_I18N = True
 

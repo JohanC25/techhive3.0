@@ -10,6 +10,7 @@ from rest_framework_simplejwt.views import (
     TokenRefreshView,
 )
 
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def tenant_landing(request):
@@ -17,19 +18,26 @@ def tenant_landing(request):
         "page": f"Welcome {request.tenant.name}"
     })
 
+
 urlpatterns = [
     path("admin/", admin.site.urls),
 
     # Tenant homepage
     path("", tenant_landing, name="tenant-landing"),
 
-    # Tenant APIs
-    path("api/users/", include("apps.users.urls")),
-    path("api/sales/", include("apps.modules.sales.urls")),
-    path("api/inventory/", include("apps.modules.inventory.urls")),
-
     # Auth endpoints
     path("api/login/", TokenObtainPairView.as_view(), name="login"),
     path("api/refresh/", TokenRefreshView.as_view(), name="refresh"),
+
+    # Módulos
+    path("api/users/", include("apps.users.urls")),
+    path("api/sales/", include("apps.modules.sales.urls")),
+    path("api/inventory/", include("apps.modules.inventory.urls")),
+    path("api/purchases/", include("apps.modules.purchases.urls")),
+    path("api/cash/", include("apps.modules.cash_management.urls")),
+    path("api/technical-service/", include("apps.modules.technical_service.urls")),
+    path("api/reports/", include("apps.modules.reports.urls")),
+
+    # Chatbot
     path('api/chatbot/', include('apps.chatbot.urls')),
 ]

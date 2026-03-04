@@ -1,8 +1,9 @@
-from django.urls import path
-from .views import SalesHealthCheckView
+from rest_framework.routers import DefaultRouter
+from .views import VentaViewSet
 
-app_name = "sales"
+app_name = 'sales'
 
-urlpatterns = [
-    path("health/", SalesHealthCheckView.as_view(), name="health"),
-]
+router = DefaultRouter()
+router.register(r'ventas', VentaViewSet, basename='venta')
+
+urlpatterns = router.urls

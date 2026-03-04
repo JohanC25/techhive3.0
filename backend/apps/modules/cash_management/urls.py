@@ -1,3 +1,9 @@
-from django.urls import path
+from rest_framework.routers import DefaultRouter
+from .views import CashMovementViewSet
 
-urlpatterns = []
+app_name = 'cash_management'
+
+router = DefaultRouter()
+router.register(r'movements', CashMovementViewSet, basename='movement')
+
+urlpatterns = router.urls
