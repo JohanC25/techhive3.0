@@ -39,27 +39,31 @@ SHARED_APPS = (
     'apps.core',
 
     'django.contrib.contenttypes',
-    'corsheaders',
-)
-
-TENANT_APPS = (
     'django.contrib.auth',
     'django.contrib.sessions',
     'django.contrib.admin',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
+)
 
+TENANT_APPS = (
     'rest_framework',
     'rest_framework_simplejwt',
 
     'apps.users',
     'apps.modules.sales',
     'apps.modules.inventory',
+    'apps.modules.purchases',
+    'apps.modules.reports',
+    'apps.modules.cash_management',
+    'apps.modules.technical_service',
 )
 
 INSTALLED_APPS = SHARED_APPS + tuple(
     app for app in TENANT_APPS if app not in SHARED_APPS
 )
+
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
@@ -82,9 +86,15 @@ MIDDLEWARE = [
 
 TENANT_MODEL = "tenants.Company"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
+##AUTH_USER_MODEL = 'users.User'
 
+##CORS_ALLOWED_ORIGINS = [
+    ##"http://localhost:5173",
+##]
+## CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",
+    "http://magicworldcomputers.localhost:5173",
 ]
 
 TEMPLATES = [

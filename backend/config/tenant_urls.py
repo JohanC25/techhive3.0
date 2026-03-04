@@ -9,24 +9,26 @@ from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
+##from apps.users.serializers import CedulaTokenObtainPairSerializer
 
 @api_view(["GET"])
-@permission_classes([IsAuthenticated])
-def tenant_landing(request):
+def tenant_public_info(request):
     return Response({
-        "page": f"Welcome {request.tenant.name}"
+        "company": request.tenant.name,
+        "message": "Welcome to your tenant system",
     })
+
+##class CedulaTokenObtainPairView(TokenObtainPairView):
+##    serializer_class = CedulaTokenObtainPairSerializer
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-
-    # Tenant homepage
-    path("", tenant_landing, name="tenant-landing"),
-
+    
     # Tenant APIs
     path("api/users/", include("apps.users.urls")),
     path("api/sales/", include("apps.modules.sales.urls")),
     path("api/inventory/", include("apps.modules.inventory.urls")),
+    path("api/public-info/", tenant_public_info),
 
     # Auth endpoints
     path("api/login/", TokenObtainPairView.as_view(), name="login"),

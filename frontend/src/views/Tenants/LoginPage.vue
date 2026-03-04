@@ -5,6 +5,7 @@ import api from '@/services/api'
 
 const router = useRouter()
 
+// Cambiamos cedula por username
 const username = ref('')
 const password = ref('')
 const error = ref('')
@@ -15,6 +16,7 @@ const login = async () => {
   loading.value = true
 
   try {
+    // El backend (SimpleJWT) espera 'username' por defecto
     const response = await api.post('/api/login/', {
       username: username.value,
       password: password.value
@@ -24,9 +26,9 @@ const login = async () => {
     localStorage.setItem('refresh', response.data.refresh)
 
     router.push('/dashboard')
-
   } catch (err) {
-    error.value = 'Invalid credentials'
+    // Mensaje genérico para mayor seguridad
+    error.value = 'Usuario o contraseña incorrecta'
   } finally {
     loading.value = false
   }
@@ -35,13 +37,23 @@ const login = async () => {
 
 <template>
   <div class="login">
-    <h2>Admin Login</h2>
+    <h2>Tenant Login</h2>
 
-    <input v-model="username" placeholder="Username" />
-    <input v-model="password" type="password" placeholder="Password" />
+    <input
+      v-model="username"
+      placeholder="Nombre de usuario"
+      type="text"
+    />
+
+    <input
+      v-model="password"
+      type="password"
+      placeholder="Contraseña"
+      @keyup.enter="login"
+    />
 
     <button @click="login" :disabled="loading">
-      {{ loading ? 'Logging in...' : 'Login' }}
+      {{ loading ? 'Ingresando...' : 'Ingresar' }}
     </button>
 
     <p v-if="error" class="error">{{ error }}</p>
@@ -49,21 +61,36 @@ const login = async () => {
 </template>
 
 <style scoped>
+/* Tu estilo se mantiene igual */
 .login {
-  text-align: center;
-  margin-top: 120px;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  font-family: Arial, sans-serif;
 }
 
 input {
-  display: block;
-  margin: 10px auto;
-  padding: 8px;
-  width: 250px;
+  margin: 10px;
+  padding: 10px;
+  width: 260px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
 }
 
 button {
   padding: 10px 20px;
   cursor: pointer;
+  border: none;
+  border-radius: 6px;
+  background: #111827;
+  color: white;
+}
+
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .error {

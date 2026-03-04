@@ -1,22 +1,7 @@
-<script setup>
-import { ref, onMounted } from 'vue'
-import axios from 'axios'
+<script setup lang="ts">
 import { useRouter } from 'vue-router'
 
-
-const data = ref(null)
 const router = useRouter()
-
-import api from '@/services/api'
-
-onMounted(async () => {
-  try {
-    const response = await api.get('/')
-    data.value = response.data
-  } catch (error) {
-    console.error(error)
-  }
-})
 
 const goToLogin = () => {
   router.push('/login')
@@ -24,26 +9,45 @@ const goToLogin = () => {
 </script>
 
 <template>
-  <div class="landing" v-if="data">
-    <h1>{{ data.company }}</h1>
-    <h2>{{ data.headline }}</h2>
-    <p>{{ data.subheadline }}</p>
+  <div class="landing">
+    <nav class="navbar">
+      <h1>MySaaS</h1>
+      <button @click="goToLogin">Admin Login</button>
+    </nav>
 
-    <ul>
-      <li v-for="feature in data.features" :key="feature">
-        {{ feature }}
-      </li>
-    </ul>
+    <section class="hero">
+      <h2>Multi-Tenant Business Management Platform</h2>
+      <p>
+        Create secure, independent systems for every company.
+      </p>
 
-    <button @click="goToLogin">
-      Login
-    </button>
+      <button class="cta" @click="goToLogin">
+        Get Started
+      </button>
+    </section>
   </div>
 </template>
 
-<style>
+<style scoped>
 .landing {
+  font-family: Arial, sans-serif;
   text-align: center;
-  padding: 50px;
+}
+
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  padding: 20px 40px;
+}
+
+.hero {
+  margin-top: 120px;
+}
+
+.cta {
+  margin-top: 20px;
+  padding: 12px 24px;
+  font-size: 16px;
+  cursor: pointer;
 }
 </style>
