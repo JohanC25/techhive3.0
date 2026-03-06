@@ -23,10 +23,10 @@ load_dotenv(BASE_DIR / ".env")
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_-pqk%2vh0+$w7iav9&tf+0)!xrc+dk&6#91a&lh(=gl!@#v*)'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = ['*']
 PUBLIC_SCHEMA_URLCONF = "config.public_urls"
@@ -164,3 +164,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 PUBLIC_SCHEMA_NAME = "public"
+
+# Admin portal master key
+ADMIN_MASTER_KEY = os.getenv("ADMIN_MASTER_KEY", "change-me-in-production")

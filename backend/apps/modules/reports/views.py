@@ -23,7 +23,7 @@ def dashboard_summary(request):
         ventas_qs = Venta.objects.filter(fecha_venta__range=[fecha_inicio, fecha_fin])
         ventas_agg = ventas_qs.aggregate(total_sum=Sum('total'), transacciones=Count('id'), promedio=Avg('total'))
     except Exception:
-        ventas_agg = {'total': 0, 'transacciones': 0, 'promedio': 0}
+        ventas_agg = {'total_sum': 0, 'transacciones': 0, 'promedio': 0}
 
     # Caja
     try:
