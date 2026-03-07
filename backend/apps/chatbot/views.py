@@ -4,24 +4,25 @@ Endpoint principal que recibe mensajes y devuelve respuestas.
 """
 
 import uuid
-from django.utils import timezone
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 
 from .models import ChatSession, ChatMessage
 from .router import detectar_intencion
 from .handlers import ejecutar_intencion
+from .client_router import detectar_intencion_cliente
+from .client_handlers import ejecutar_intencion_cliente
 
 
 @api_view(['POST'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def enviar_mensaje(request):
     """
     POST /api/chatbot/mensaje/
-    Body: { "mensaje": "¿Cuánto vendimos hoy?", "session_id": "opcional-uuid" }
-    Response: { "respuesta": "...", "intent": "...", "session_id": "..." }
+    Body: { "mensaje": "...", "session_id": "opcional-uuid" }
+    Ruta al router de clientes o de staff según el rol del usuario.
     """
     mensaje = request.data.get('mensaje', '').strip()
     session_id = request.data.get('session_id', '')
@@ -43,7 +44,6 @@ def enviar_mensaje(request):
         session_id = str(uuid.uuid4())
 
     # Detectar schema del tenant activo
-    # Con django-tenants, connection.schema_name tiene el schema actual
     try:
         from django.db import connection
         tenant_schema = connection.schema_name
@@ -62,12 +62,40 @@ def enviar_mensaje(request):
         content=mensaje,
     )
 
-    # Procesar con el router
-    resultado_router = detectar_intencion(mensaje)
+    # Enrutar según rol: clientes usan el router de catálogo
+    es_cliente = getattr(request.user, 'role', '') == 'client'
+
+    if es_cliente:
+        resultado_router = detectar_intencion_cliente(mensaje)
+        respuesta = ejecutar_intencion_cliente(resultado_router)
+    else:
+        resultado_router = detectar_intencion(mensaje)
+        respuesta = ejecutar_intencion(resultado_router)
+
     intent = resultado_router['intent']
 
-    # Ejecutar handler correspondiente
-    respuesta = ejecutar_intencion(resultado_router)
+    # Fallback LLM: cuando el regex no detectó intención, Claude intenta ayudar
+    if intent == 'desconocido':
+        from .llm_fallback import fallback_staff, fallback_cliente
+        if es_cliente:
+            # Pasar categorías como contexto para que Claude pueda guiar mejor
+            try:
+                from django.db import connection as conn
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT DISTINCT c.name FROM inventory_category c "
+                        "INNER JOIN inventory_product p ON p.category_id = c.id "
+                        "WHERE p.is_active = TRUE ORDER BY c.name LIMIT 15"
+                    )
+                    categorias = [r[0] for r in cur.fetchall()]
+            except Exception:
+                categorias = []
+            llm_resp = fallback_cliente(mensaje, categorias=categorias)
+        else:
+            llm_resp = fallback_staff(mensaje)
+
+        if llm_resp:
+            respuesta = llm_resp
 
     # Guardar respuesta del bot
     ChatMessage.objects.create(
@@ -86,7 +114,7 @@ def enviar_mensaje(request):
 
 
 @api_view(['GET'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def historial_sesion(request, session_id):
     """
     GET /api/chatbot/historial/<session_id>/
@@ -111,7 +139,7 @@ def historial_sesion(request, session_id):
 
 
 @api_view(['DELETE'])
-@permission_classes([AllowAny])
+@permission_classes([IsAuthenticated])
 def limpiar_sesion(request, session_id):
     """
     DELETE /api/chatbot/historial/<session_id>/

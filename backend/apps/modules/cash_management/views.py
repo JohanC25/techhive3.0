@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Sum, Q
 
+from apps.core.permissions import IsNotClient
 from .models import CashMovement
 from .serializers import CashMovementSerializer
 
@@ -11,7 +12,7 @@ from .serializers import CashMovementSerializer
 class CashMovementViewSet(viewsets.ModelViewSet):
     queryset = CashMovement.objects.all()
     serializer_class = CashMovementSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsNotClient]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['description', 'notes']
     ordering_fields = ['date', 'amount', 'created_at']

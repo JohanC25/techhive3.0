@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.core.management import call_command
+from rest_framework.authentication import BaseAuthentication
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,9 +9,17 @@ from .admin_auth import admin_required, create_admin_token
 from .models import Company, Domain
 
 
+class NoAuthentication(BaseAuthentication):
+    """Desactiva la autenticación DRF en los endpoints admin.
+    La auth la maneja el decorador @admin_required."""
+    def authenticate(self, request):
+        return None
+
+
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
 class AdminLoginView(APIView):
+    authentication_classes = [NoAuthentication]
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -26,6 +35,7 @@ class AdminLoginView(APIView):
 # ── Módulos disponibles ────────────────────────────────────────────────────────
 
 class ModuleListView(APIView):
+    authentication_classes = [NoAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -37,6 +47,7 @@ class ModuleListView(APIView):
 # ── Empresas (tenants) ────────────────────────────────────────────────────────
 
 class CompanyListView(APIView):
+    authentication_classes = [NoAuthentication]
     permission_classes = [AllowAny]
 
     def get(self, request):
@@ -50,7 +61,6 @@ class CompanyListView(APIView):
                 "schema_name": c.schema_name,
                 "domain": primary.domain if primary else None,
                 "on_trial": c.on_trial,
-                "created_on": str(c.created_on),
                 "modules": list(c.modules.values("code", "name")),
             })
         return Response(data)
@@ -121,6 +131,7 @@ class CompanyListView(APIView):
 
 
 class CompanyDetailView(APIView):
+    authentication_classes = [NoAuthentication]
     permission_classes = [AllowAny]
 
     @admin_required
@@ -135,6 +146,7 @@ class CompanyDetailView(APIView):
 
 class CompanyModulesView(APIView):
     """PUT /api/admin/companies/{pk}/modules/ — reemplaza los módulos activos."""
+    authentication_classes = [NoAuthentication]
     permission_classes = [AllowAny]
 
     @admin_required

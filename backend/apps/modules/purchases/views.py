@@ -1,6 +1,7 @@
 from rest_framework import viewsets, filters
 from rest_framework.permissions import IsAuthenticated
 
+from apps.core.permissions import IsNotClient
 from .models import Supplier, Purchase
 from .serializers import SupplierSerializer, PurchaseSerializer
 
@@ -8,7 +9,7 @@ from .serializers import SupplierSerializer, PurchaseSerializer
 class SupplierViewSet(viewsets.ModelViewSet):
     queryset = Supplier.objects.all()
     serializer_class = SupplierSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsNotClient]
     filter_backends = [filters.SearchFilter]
     search_fields = ['name', 'ruc', 'email']
 
@@ -23,7 +24,7 @@ class SupplierViewSet(viewsets.ModelViewSet):
 class PurchaseViewSet(viewsets.ModelViewSet):
     queryset = Purchase.objects.select_related('supplier').prefetch_related('items').all()
     serializer_class = PurchaseSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsNotClient]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['supplier__name', 'notes']
     ordering_fields = ['date', 'total', 'created_at']

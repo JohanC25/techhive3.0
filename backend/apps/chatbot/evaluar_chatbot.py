@@ -1,6 +1,8 @@
 """
 Evaluador del router de intenciones - TechHive Chatbot
-Uso: python evaluar_chatbot.py --version "v1-baseline"
+Uso:
+  python evaluar_chatbot.py --version "v3-fix-meses"           # evalúa router staff
+  python evaluar_chatbot.py --version "v1-client" --modo cliente # evalúa router cliente
 """
 
 import sys
@@ -11,6 +13,7 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(__file__))
 from router import detectar_intencion
+from client_router import detectar_intencion_cliente
 
 CASOS_DE_PRUEBA = [
     # SALUDO
@@ -76,22 +79,66 @@ CASOS_DE_PRUEBA = [
     ("cuanto venderemos en febrero",                "prediccion"),
 ]
 
-def evaluar(version="baseline"):
-    print(f"\n{'='*60}")
-    print(f"  EVALUACION DEL ROUTER - TechHive Chatbot")
-    print(f"  Version: {version}")
-    print(f"  Fecha:   {datetime.now().strftime('%Y-%m-%d %H:%M')}")
-    print(f"{'='*60}\n")
+# ─────────────────────────────────────────────
+# TEST SET — ROUTER CLIENTE (v1-client-baseline)
+# ─────────────────────────────────────────────
+CASOS_CLIENTE = [
+    # SALUDO
+    ("hola",                                            "saludo"),
+    ("buenos dias",                                     "saludo"),
+    ("buenas tardes",                                   "saludo"),
+    ("hey",                                             "saludo"),
+    ("saludos",                                         "saludo"),
+    # AYUDA
+    ("ayuda",                                           "ayuda"),
+    ("que puedes hacer",                                "ayuda"),
+    ("para que sirves",                                 "ayuda"),
+    ("como te uso",                                     "ayuda"),
+    # LISTAR CATEGORIAS
+    ("que categorias tienen",                           "listar_categorias"),
+    ("que tipo de productos venden",                    "listar_categorias"),
+    ("que productos manejan",                           "listar_categorias"),
+    ("cuales son las categorias",                       "listar_categorias"),
+    ("que tienen disponible",                           "listar_categorias"),
+    # CONSULTAR PRECIO
+    ("cuanto cuesta el laptop",                         "consultar_precio"),
+    ("cual es el precio del mouse",                     "consultar_precio"),
+    ("cuanto vale la impresora",                        "consultar_precio"),
+    ("precio de auriculares",                           "consultar_precio"),
+    ("cuanto sale el teclado mecanico",                 "consultar_precio"),
+    ("cuanto es el monitor",                            "consultar_precio"),
+    # VERIFICAR DISPONIBILIDAD
+    ("hay laptops disponibles",                         "verificar_disponibilidad"),
+    ("tienen teclados en stock",                        "verificar_disponibilidad"),
+    ("esta disponible el mouse",                        "verificar_disponibilidad"),
+    ("hay auriculares",                                 "verificar_disponibilidad"),
+    ("cuentan con impresoras",                          "verificar_disponibilidad"),
+    ("se puede conseguir una camara",                   "verificar_disponibilidad"),
+    # BUSCAR CATALOGO
+    ("muéstrame productos de audio",                    "buscar_catalogo"),
+    ("busca impresoras",                                "buscar_catalogo"),
+    ("quiero ver laptops",                              "buscar_catalogo"),
+    ("muestrame el catalogo",                           "buscar_catalogo"),
+    ("buscar teclados",                                 "buscar_catalogo"),
+    ("ver productos de computadoras",                   "buscar_catalogo"),
+    ("dame opciones de monitores",                      "buscar_catalogo"),
+    # DESCONOCIDO
+    ("cuanto vendimos hoy",                             "desconocido"),
+    ("ventas de enero",                                 "desconocido"),
+    ("producto mas vendido",                            "desconocido"),
+]
 
+
+def _calcular_metricas(casos, fn_detectar):
     correctos = 0
-    total = len(CASOS_DE_PRUEBA)
+    total = len(casos)
     errores = []
     tp = defaultdict(int)
     fp = defaultdict(int)
     fn = defaultdict(int)
 
-    for pregunta, esperado in CASOS_DE_PRUEBA:
-        resultado = detectar_intencion(pregunta)
+    for pregunta, esperado in casos:
+        resultado = fn_detectar(pregunta)
         obtenido = resultado['intent']
         if obtenido == esperado:
             correctos += 1
@@ -99,18 +146,14 @@ def evaluar(version="baseline"):
         else:
             fn[esperado] += 1
             fp[obtenido] += 1
-            errores.append({
-                'pregunta': pregunta,
-                'esperado': esperado,
-                'obtenido': obtenido,
-            })
+            errores.append({'pregunta': pregunta, 'esperado': esperado, 'obtenido': obtenido})
 
     accuracy = (correctos / total) * 100
-    intenciones = sorted(set([e for _, e in CASOS_DE_PRUEBA]))
+    intenciones = sorted(set(e for _, e in casos))
     f1_scores = []
 
-    print(f"{'INTENCION':<25} {'TP':>4} {'FP':>4} {'FN':>4} {'Precision':>10} {'Recall':>8} {'F1':>8}")
-    print(f"{'-'*65}")
+    print(f"{'INTENCION':<28} {'TP':>4} {'FP':>4} {'FN':>4} {'Precision':>10} {'Recall':>8} {'F1':>8}")
+    print(f"{'-'*68}")
 
     for intent in intenciones:
         t = tp[intent]
@@ -120,15 +163,30 @@ def evaluar(version="baseline"):
         recall = t / (t + fn_val) if (t + fn_val) > 0 else 0
         f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0
         f1_scores.append(f1)
-        print(f"{intent:<25} {t:>4} {f:>4} {fn_val:>4} {precision:>9.1%} {recall:>7.1%} {f1:>7.1%}")
+        print(f"{intent:<28} {t:>4} {f:>4} {fn_val:>4} {precision:>9.1%} {recall:>7.1%} {f1:>7.1%}")
 
-    macro_f1 = sum(f1_scores) / len(f1_scores)
+    macro_f1 = sum(f1_scores) / len(f1_scores) if f1_scores else 0
+    return correctos, total, accuracy, macro_f1, errores
 
-    print(f"\n{'='*60}")
+
+def evaluar(version="baseline", modo="staff"):
+    casos = CASOS_CLIENTE if modo == "cliente" else CASOS_DE_PRUEBA
+    fn_detectar = detectar_intencion_cliente if modo == "cliente" else detectar_intencion
+    etiqueta = "CLIENTE" if modo == "cliente" else "STAFF"
+
+    print(f"\n{'='*68}")
+    print(f"  EVALUACION DEL ROUTER [{etiqueta}] - TechHive Chatbot")
+    print(f"  Version: {version}")
+    print(f"  Fecha:   {datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    print(f"{'='*68}\n")
+
+    correctos, total, accuracy, macro_f1, errores = _calcular_metricas(casos, fn_detectar)
+
+    print(f"\n{'='*68}")
     print(f"  Accuracy:   {accuracy:.1f}%")
     print(f"  Macro F1:   {macro_f1:.1%}")
     print(f"  Correctos:  {correctos}/{total}")
-    print(f"{'='*60}")
+    print(f"{'='*68}")
 
     if errores:
         print(f"\n  ERRORES ({len(errores)}):")
@@ -137,10 +195,13 @@ def evaluar(version="baseline"):
             print(f"    Esperado: {e['esperado']} | Obtenido: {e['obtenido']}")
 
     print(f"\n  FILA PARA TU TABLA:")
-    print(f"  | {version} | <describe el cambio> | {accuracy:.1f}% | {macro_f1:.1%} | {correctos}/{total} | {datetime.now().strftime('%Y-%m-%d')} |")
+    print(f"  | {version} | [{etiqueta}] <describe el cambio> | {accuracy:.1f}% | {macro_f1:.1%} | {correctos}/{total} |")
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--version', default='baseline')
+    parser.add_argument('--modo', choices=['staff', 'cliente'], default='staff',
+                        help='staff = router de ventas, cliente = router de catálogo')
     args = parser.parse_args()
-    evaluar(version=args.version)
+    evaluar(version=args.version, modo=args.modo)

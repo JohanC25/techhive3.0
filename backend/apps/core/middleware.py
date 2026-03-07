@@ -27,6 +27,10 @@ class ModuleAccessMiddleware:
         if module_code in EXCLUDED:
             return None
 
+        # El catálogo público de productos es accesible aunque inventory esté desactivado
+        if module_code == "inventory" and resolver.url_name == "product-catalog":
+            return None
+
         if not request.tenant.modules.filter(code=module_code).exists():
             return JsonResponse(
                 {"detail": f"El módulo '{module_code}' no está habilitado para esta empresa."},

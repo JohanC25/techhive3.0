@@ -4,6 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.db.models import Sum, Count, Avg
 
+from apps.core.permissions import IsNotClient
 from .models import Venta
 from .serializers import VentaSerializer
 
@@ -11,7 +12,7 @@ from .serializers import VentaSerializer
 class VentaViewSet(viewsets.ModelViewSet):
     queryset = Venta.objects.all()
     serializer_class = VentaSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsNotClient]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['descripcion', 'metodo_pago']
     ordering_fields = ['fecha_venta', 'total', 'created_at']
