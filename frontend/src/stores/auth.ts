@@ -9,7 +9,7 @@ export interface AuthUser {
   first_name: string
   last_name: string
   email: string
-  role: 'admin' | 'manager' | 'employee'
+  role: 'admin' | 'manager' | 'employee' | 'client'
   phone: string
 }
 

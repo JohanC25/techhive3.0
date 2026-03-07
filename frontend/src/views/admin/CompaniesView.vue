@@ -186,7 +186,6 @@ interface Company {
   schema_name: string
   domain: string | null
   on_trial: boolean
-  created_on: string
   modules: Module[]
 }
 
@@ -264,7 +263,7 @@ async function createCompany() {
   creating.value = true
   try {
     const { data } = await adminApi.post('/companies/', form.value)
-    companies.value.push({ ...data, on_trial: false, created_on: '', modules: allModules.value.filter((m) => form.value.modules.includes(m.code)) })
+    companies.value.push({ ...data, on_trial: false, modules: allModules.value.filter((m) => form.value.modules.includes(m.code)) })
     closeCreateModal()
   } catch (e: any) {
     createError.value = e.response?.data?.detail || 'Error al crear la empresa.'

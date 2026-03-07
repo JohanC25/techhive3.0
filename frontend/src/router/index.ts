@@ -43,12 +43,14 @@ const tenantRoutes = [
     children: [
       { path: '', redirect: '/dashboard' },
       { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { title: 'Dashboard' } },
+      { path: 'catalog', name: 'catalog', component: () => import('@/views/catalog/CatalogView.vue'), meta: { title: 'Catálogo' } },
       { path: 'sales', name: 'sales', component: () => import('@/views/sales/SalesView.vue'), meta: { title: 'Ventas' } },
       { path: 'inventory', name: 'inventory', component: () => import('@/views/inventory/InventoryView.vue'), meta: { title: 'Inventario' } },
       { path: 'purchases', name: 'purchases', component: () => import('@/views/purchases/PurchasesView.vue'), meta: { title: 'Compras' } },
       { path: 'cash', name: 'cash', component: () => import('@/views/cash/CashView.vue'), meta: { title: 'Caja' } },
       { path: 'technical-service', name: 'technical-service', component: () => import('@/views/technical-service/TicketsView.vue'), meta: { title: 'Servicio Técnico' } },
       { path: 'reports', name: 'reports', component: () => import('@/views/reports/ReportsView.vue'), meta: { title: 'Reportes' } },
+      { path: 'users', name: 'users', component: () => import('@/views/users/UsersView.vue'), meta: { title: 'Usuarios' } },
     ],
   },
   { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
@@ -66,9 +68,22 @@ router.beforeEach((to, _from, next) => {
     if (to.meta.guest && admin.isAuthenticated) return next('/')
     return next()
   }
+
   const auth = useAuthStore()
+  const isClient = auth.user?.role === 'client'
+
   if (to.meta.requiresAuth && !auth.isAuthenticated) return next('/login')
-  if (to.meta.guest && auth.isAuthenticated) return next('/dashboard')
+
+  // Clientes autenticados → solo pueden estar en /catalog o /login
+  if (auth.isAuthenticated && isClient && to.name !== 'catalog') {
+    return next('/catalog')
+  }
+
+  // Al hacer login, redirigir clientes al catálogo en vez del dashboard
+  if (to.meta.guest && auth.isAuthenticated) {
+    return next(isClient ? '/catalog' : '/dashboard')
+  }
+
   next()
 })
 

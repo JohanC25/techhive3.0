@@ -14,7 +14,7 @@
           <div class="chat-header-info">
             <div class="chat-avatar">🤖</div>
             <div>
-              <div class="chat-title">Asistente TechHive</div>
+              <div class="chat-title">{{ chatTitulo }}</div>
               <div class="chat-subtitle">{{ statusText }}</div>
             </div>
           </div>
@@ -25,7 +25,7 @@
         <div class="chat-messages" ref="messagesContainer">
           <!-- Mensaje de bienvenida -->
           <div v-if="mensajes.length === 0" class="mensaje-bienvenida">
-            <p>¡Hola! Soy tu asistente comercial. Puedes preguntarme sobre ventas, productos y tendencias.</p>
+            <p>{{ bienvenidaTexto }}</p>
             <div class="sugerencias">
               <button
                 v-for="sug in sugerencias"
@@ -81,6 +81,9 @@
 <script setup lang="ts">
 import { ref, nextTick, computed } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
+
+const auth = useAuthStore()
 
 // ─── Estado ───────────────────────────────────
 const isOpen = ref(false)
@@ -99,12 +102,34 @@ interface Mensaje {
 
 const mensajes = ref<Mensaje[]>([])
 
-const sugerencias = [
-  '¿Cuánto vendimos hoy?',
-  'Top productos de este mes',
-  'Ventas de esta semana',
-  'Comparar este mes vs anterior',
-]
+// ─── Rol del usuario ──────────────────────────
+const esCliente = computed(() => auth.user?.role === 'client')
+
+const chatTitulo = computed(() =>
+  esCliente.value ? 'Asistente de Compras' : 'Asistente TechHive'
+)
+
+const bienvenidaTexto = computed(() =>
+  esCliente.value
+    ? '¡Hola! Puedo ayudarte a buscar productos, consultar precios y verificar disponibilidad.'
+    : '¡Hola! Soy tu asistente comercial. Puedes preguntarme sobre ventas, productos y tendencias.'
+)
+
+const sugerencias = computed(() =>
+  esCliente.value
+    ? [
+        '¿Cuánto cuesta el laptop?',
+        '¿Qué categorías tienen?',
+        '¿Hay auriculares disponibles?',
+        'Muéstrame productos de audio',
+      ]
+    : [
+        '¿Cuánto vendimos hoy?',
+        'Top productos de este mes',
+        'Ventas de esta semana',
+        'Comparar este mes vs anterior',
+      ]
+)
 
 // ─── Computed ─────────────────────────────────
 const statusText = computed(() => {

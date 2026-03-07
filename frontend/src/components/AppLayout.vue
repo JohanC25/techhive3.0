@@ -81,10 +81,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import api from '@/services/api'
 
 const auth = useAuthStore()
 const toastStore = useToastStore()
@@ -92,44 +93,93 @@ const router = useRouter()
 const route = useRoute()
 
 const sidebarCollapsed = ref(false)
+const enabledModules = ref<string[]>([])
 
-const navItems = [
+// Todos los módulos posibles con su código de módulo
+const allNavItems = [
   {
     to: '/dashboard',
     label: 'Dashboard',
+    moduleCode: null, // siempre visible
     icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>`,
   },
   {
     to: '/sales',
     label: 'Ventas',
+    moduleCode: 'sales',
     icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>`,
   },
   {
     to: '/inventory',
     label: 'Inventario',
+    moduleCode: 'inventory',
     icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/></svg>`,
   },
   {
     to: '/purchases',
     label: 'Compras',
+    moduleCode: 'purchases',
     icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"/></svg>`,
   },
   {
     to: '/cash',
     label: 'Caja',
+    moduleCode: 'cash_management',
     icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><path stroke-linecap="round" d="M2 10h20"/></svg>`,
   },
   {
     to: '/technical-service',
     label: 'Servicio Técnico',
+    moduleCode: 'technical_service',
     icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>`,
   },
   {
     to: '/reports',
     label: 'Reportes',
+    moduleCode: 'reports',
     icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>`,
   },
+  {
+    to: '/users',
+    label: 'Usuarios',
+    moduleCode: null,
+    adminOnly: true, // solo admin y manager
+    icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"/></svg>`,
+  },
 ]
+
+const isClient = computed(() => auth.user?.role === 'client')
+const isAdminOrManager = computed(() => ['admin', 'manager'].includes(auth.user?.role ?? ''))
+
+// Clientes solo ven el catálogo; el resto filtra por módulos habilitados y rol
+const navItems = computed(() => {
+  if (isClient.value) {
+    return [
+      {
+        to: '/catalog',
+        label: 'Catálogo',
+        moduleCode: null,
+        icon: `<svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>`,
+      },
+    ]
+  }
+  return allNavItems.filter((item) => {
+    if ((item as any).adminOnly && !isAdminOrManager.value) return false
+    return item.moduleCode === null || enabledModules.value.includes(item.moduleCode)
+  })
+})
+
+async function loadModules() {
+  if (isClient.value) return // clientes no necesitan esta llamada
+  try {
+    const { data } = await api.get('/users/modules/')
+    enabledModules.value = data.map((m: { code: string }) => m.code)
+  } catch {
+    enabledModules.value = allNavItems.filter((i) => i.moduleCode).map((i) => i.moduleCode as string)
+  }
+}
+
+onMounted(loadModules)
 
 const toastIcons: Record<string, string> = {
   success: '✓',
