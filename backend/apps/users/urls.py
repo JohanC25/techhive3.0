@@ -1,13 +1,7 @@
-# apps/users/urls.py
+from rest_framework.routers import DefaultRouter
+from .views import UserViewSet
 
-from django.urls import path
-from rest_framework.response import Response
-from rest_framework.decorators import api_view
+router = DefaultRouter()
+router.register(r'', UserViewSet, basename='users')
 
-@api_view(["GET"])
-def test_user(request):
-    return Response({"message": "Users endpoint works"})
-
-urlpatterns = [
-    path("test/", test_user),
-]
+urlpatterns = router.urls

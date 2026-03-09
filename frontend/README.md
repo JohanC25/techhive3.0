@@ -1,54 +1,124 @@
-# frontend
+# Frontend — TechHive 3.0
 
-This template should help get you started developing with Vue 3 in Vite.
+Vue 3 + Vite + TypeScript. SPA que sirve tanto el portal admin (gestión de empresas) como el ERP de cada tenant.
 
-## Recommended IDE Setup
+## Stack
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+- **Vue 3.5** con Composition API y `<script setup>`
+- **Vite 7** como bundler
+- **TypeScript 5.9**
+- **Pinia 3** para gestión de estado
+- **Vue Router 5**
+- **Axios** para peticiones HTTP
 
-## Recommended Browser Setup
+## Instalación
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
-
-## Type Support for `.vue` Imports in TS
-
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
-
-## Customize configuration
-
-See [Vite Configuration Reference](https://vite.dev/config/).
-
-## Project Setup
-
-```sh
+```bash
+cd frontend
 npm install
 ```
 
-### Compile and Hot-Reload for Development
+## Variables de entorno
 
-```sh
-npm run dev
+Crear un archivo `.env` en `frontend/` (opcional — los valores por defecto funcionan para desarrollo local):
+
+```env
+VITE_API_BASE_URL=http://localhost:8000
 ```
 
-### Type-Check, Compile and Minify for Production
+## Scripts disponibles
 
-```sh
-npm run build
+| Comando              | Descripción                                      |
+|----------------------|--------------------------------------------------|
+| `npm run dev`        | Servidor de desarrollo con HMR en `:5173`        |
+| `npm run build`      | Build de producción (type-check + build)         |
+| `npm run preview`    | Preview del build de producción en `:4173`       |
+| `npm run type-check` | Verificación de tipos con vue-tsc                |
+| `npm run lint`       | Linting con oxlint + eslint (con autofix)        |
+| `npm run format`     | Formateo con Prettier                            |
+| `npm run test:unit`  | Tests unitarios con Vitest                       |
+
+## Estructura de vistas
+
+```
+src/
+├── views/
+│   ├── LoginView.vue               Inicio de sesión tenant
+│   ├── DashboardView.vue           Dashboard principal
+│   ├── admin/
+│   │   ├── AdminLoginView.vue      Login con ADMIN_MASTER_KEY
+│   │   ├── AdminLayout.vue         Layout del portal admin
+│   │   └── CompaniesView.vue       CRUD de empresas y módulos
+│   ├── catalog/
+│   │   └── CatalogView.vue         Catálogo público (accesible a clientes)
+│   ├── inventory/                  Gestión de inventario (staff+)
+│   ├── sales/                      Ventas (staff+)
+│   ├── purchases/                  Compras (staff+)
+│   ├── cash/                       Caja (staff+)
+│   ├── reports/                    Reportes (staff+)
+│   ├── technical-service/          Servicio técnico (staff+)
+│   └── users/                      Gestión de usuarios (admin)
+├── stores/
+│   ├── auth.ts                     Estado de autenticación JWT + rol de usuario
+│   ├── adminStore.ts               Estado del portal admin (token admin, empresas)
+│   └── toast.ts                    Notificaciones toast globales
+└── components/
+    └── ChatBot.vue                 Chatbot flotante (staff: ventas, cliente: catálogo)
 ```
 
-### Run Unit Tests with [Vitest](https://vitest.dev/)
+## Rutas principales
 
-```sh
-npm run test:unit
-```
+| Ruta                      | Componente             | Acceso             |
+|---------------------------|------------------------|--------------------|
+| `/login`                  | LoginView              | Público            |
+| `/dashboard`              | DashboardView          | Autenticado        |
+| `/catalog`                | CatalogView            | Autenticado        |
+| `/inventory`              | inventory/...          | Staff + Admin      |
+| `/sales`                  | sales/...              | Staff + Admin      |
+| `/purchases`              | purchases/...          | Staff + Admin      |
+| `/cash`                   | cash/...               | Staff + Admin      |
+| `/reports`                | reports/...            | Staff + Admin      |
+| `/technical-service`      | technical-service/...  | Staff + Admin      |
+| `/users`                  | users/...              | Solo Admin         |
+| `/admin`                  | AdminLoginView         | Público (admin)    |
+| `/admin/companies`        | CompaniesView          | Admin autenticado  |
 
-### Lint with [ESLint](https://eslint.org/)
+## Autenticación
 
-```sh
-npm run lint
-```
+El store `auth.ts` gestiona:
+- Tokens JWT (access + refresh) almacenados en `localStorage`
+- Renovación automática del access token con el refresh token
+- Datos del usuario: `id`, `email`, `role` (`admin` | `staff` | `client`)
+- Guard de navegación: redirige a `/login` si no hay sesión activa
+
+El store `adminStore.ts` gestiona:
+- Token del portal admin (independiente del JWT de tenant)
+- Lista de empresas y módulos disponibles
+- CRUD de empresas vía la API admin del backend
+
+## Chatbot
+
+El componente `ChatBot.vue` aparece como botón flotante en todas las vistas autenticadas. Detecta el rol del usuario y adapta su comportamiento:
+
+- **Staff/Admin**: título "Asistente TechHive", sugerencias orientadas a consultas de ventas
+- **Cliente**: título "Asistente de Compras", sugerencias orientadas a búsqueda de productos
+
+El historial se mantiene por `session_id` (UUID generado al primer mensaje de cada conversación).
+
+## Acceso multi-tenant en desarrollo
+
+El backend identifica el tenant por el header `Host`. Para probar diferentes tenants localmente:
+
+1. Agregar entradas en el archivo `hosts` del sistema operativo:
+   ```
+   127.0.0.1   empresa1.localhost
+   127.0.0.1   empresa2.localhost
+   ```
+2. Acceder a `http://empresa1.localhost:5173`
+
+El portal admin siempre usa `http://localhost:5173/admin` (sin subdominio de tenant).
+
+## IDE recomendado
+
+- [VS Code](https://code.visualstudio.com/) + extensión [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar)
+- Desactivar Vetur si está instalado (conflicto con Volar)

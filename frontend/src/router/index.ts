@@ -1,71 +1,87 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import type { RouteRecordRaw } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { useAdminStore } from '@/stores/adminStore'
 
-// Platform (mysaas.com)
-import CompanyLanding from '@/views/Company/LandingPage.vue'
-import CompanyLogin from '@/views/Company/LoginPage.vue'
-import CompanyDashboard from '@/views/Company/DashboardPage.vue'
-import CompaniesList from '@/views/Company/CompaniesList.vue'
-import CompanyCreate from '@/views/Company/CompanyCreate.vue'
-import CompanyEdit from '@/views/Company/CompanyEdit.vue'
-import CompanyView from '@/views/Company/CompanyView.vue'
-
-// Tenant (tenant1.mysaas.com)
-import TenantLanding from '@/views/Tenants/LandingPage.vue'
-import TenantLogin from '@/views/Tenants/LoginPage.vue'
-import TenantDashboard from '@/views/Tenants/DashboardPage.vue'
-import ChatBot from '@/views/Tenants/ChatBot.vue'
-import ReporteIA from '@/views/Tenants/ReporteIA.vue'
-
+// Detección de modo: admin.localhost → portal admin, resto → app tenant
 const hostname = window.location.hostname
+export const IS_ADMIN_PORTAL = hostname === 'admin.localhost' || hostname.startsWith('admin.')
 
-// Detect subdomain
-const isTenant =
-  hostname !== 'localhost' &&
-  !hostname.startsWith('www') &&
-  hostname.includes('.')
+const adminRoutes = [
+  {
+    path: '/login',
+    name: 'admin-login',
+    component: () => import('@/views/admin/AdminLoginView.vue'),
+    meta: { guest: true },
+  },
+  {
+    path: '/',
+    component: () => import('@/views/admin/AdminLayout.vue'),
+    meta: { requiresAdminAuth: true },
+    children: [
+      {
+        path: '',
+        name: 'admin-companies',
+        component: () => import('@/views/admin/CompaniesView.vue'),
+        meta: { title: 'Empresas' },
+      },
+    ],
+  },
+  { path: '/:pathMatch(.*)*', redirect: '/' },
+]
 
-let routes: Array<RouteRecordRaw>
-
-if (isTenant) {
-  //Rutas para empresas (tenants)
-  routes = [
-    { path: '/', name: 'TenantLanding', component: TenantLanding },
-    { path: '/login', name: 'TenantLogin', component: TenantLogin },
-    { path: '/dashboard', name: 'TenantDashboard', component: TenantDashboard },
-    
-    { path: '/chatbot', name: 'ChatBot', component: ChatBot },
-    { path: '/reporte-ia', name: 'ReporteIA', component: ReporteIA },
-  ]
-} else {
-  //Rutas para admin
-  routes = [
-    { path: '/', name: 'Landing', component: CompanyLanding },
-    { path: '/login', name: 'Login', component: CompanyLogin },
-    { path: '/dashboard', name: 'Dashboard', component: CompanyDashboard },
-
-    //Companies
-    { path: '/companies', redirect: '/companies/' },
-    { path: '/companies/', name: 'CompaniesList', component: CompaniesList },
-    { path: '/companies/create', name: 'CompanyCreate', component: CompanyCreate },
-    { path: '/companies/:id', name: 'CompanyView', component: CompanyView },
-    { path: '/companies/:id/edit', name: 'CompanyEdit', component: CompanyEdit },
-  ]
-}
+const tenantRoutes = [
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('@/views/LoginView.vue'),
+    meta: { guest: true },
+  },
+  {
+    path: '/',
+    component: () => import('@/components/AppLayout.vue'),
+    meta: { requiresAuth: true },
+    children: [
+      { path: '', redirect: '/dashboard' },
+      { path: 'dashboard', name: 'dashboard', component: () => import('@/views/DashboardView.vue'), meta: { title: 'Dashboard' } },
+      { path: 'catalog', name: 'catalog', component: () => import('@/views/catalog/CatalogView.vue'), meta: { title: 'Catálogo' } },
+      { path: 'sales', name: 'sales', component: () => import('@/views/sales/SalesView.vue'), meta: { title: 'Ventas' } },
+      { path: 'inventory', name: 'inventory', component: () => import('@/views/inventory/InventoryView.vue'), meta: { title: 'Inventario' } },
+      { path: 'purchases', name: 'purchases', component: () => import('@/views/purchases/PurchasesView.vue'), meta: { title: 'Compras' } },
+      { path: 'cash', name: 'cash', component: () => import('@/views/cash/CashView.vue'), meta: { title: 'Caja' } },
+      { path: 'technical-service', name: 'technical-service', component: () => import('@/views/technical-service/TicketsView.vue'), meta: { title: 'Servicio Técnico' } },
+      { path: 'reports', name: 'reports', component: () => import('@/views/reports/ReportsView.vue'), meta: { title: 'Reportes' } },
+      { path: 'users', name: 'users', component: () => import('@/views/users/UsersView.vue'), meta: { title: 'Usuarios' } },
+    ],
+  },
+  { path: '/:pathMatch(.*)*', redirect: '/dashboard' },
+]
 
 const router = createRouter({
-  history: createWebHistory(),
-  routes,
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: IS_ADMIN_PORTAL ? adminRoutes : tenantRoutes,
 })
 
-// 🔐 Route Guard
-router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem('access')
+router.beforeEach((to, _from, next) => {
+  if (IS_ADMIN_PORTAL) {
+    const admin = useAdminStore()
+    if (to.meta.requiresAdminAuth && !admin.isAuthenticated) return next('/login')
+    if (to.meta.guest && admin.isAuthenticated) return next('/')
+    return next()
+  }
 
-  const protectedRoutes = ['/dashboard']
+  const auth = useAuthStore()
+  const isClient = auth.user?.role === 'client'
 
-  if (protectedRoutes.includes(to.path) && !token) {
-    return next('/login')
+  if (to.meta.requiresAuth && !auth.isAuthenticated) return next('/login')
+
+  // Clientes autenticados → solo pueden estar en /catalog o /login
+  if (auth.isAuthenticated && isClient && to.name !== 'catalog') {
+    return next('/catalog')
+  }
+
+  // Al hacer login, redirigir clientes al catálogo en vez del dashboard
+  if (to.meta.guest && auth.isAuthenticated) {
+    return next(isClient ? '/catalog' : '/dashboard')
   }
 
   next()

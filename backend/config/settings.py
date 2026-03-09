@@ -23,12 +23,12 @@ load_dotenv(BASE_DIR / ".env")
 # See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-_-pqk%2vh0+$w7iav9&tf+0)!xrc+dk&6#91a&lh(=gl!@#v*)'
+SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-me-in-production')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
 PUBLIC_SCHEMA_URLCONF = "config.public_urls"
 ROOT_URLCONF = "config.tenant_urls"
 
@@ -39,15 +39,15 @@ SHARED_APPS = (
     'apps.core',
 
     'django.contrib.contenttypes',
+)
+
+TENANT_APPS = (
     'django.contrib.auth',
     'django.contrib.sessions',
     'django.contrib.admin',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'corsheaders',
-)
 
-TENANT_APPS = (
     'rest_framework',
     'rest_framework_simplejwt',
 
@@ -55,25 +55,28 @@ TENANT_APPS = (
     'apps.modules.sales',
     'apps.modules.inventory',
     'apps.modules.purchases',
-    'apps.modules.reports',
     'apps.modules.cash_management',
     'apps.modules.technical_service',
+    'apps.modules.reports',
+    'apps.chatbot.apps.ChatbotConfig',
 )
 
 INSTALLED_APPS = SHARED_APPS + tuple(
     app for app in TENANT_APPS if app not in SHARED_APPS
 )
 
+AUTH_USER_MODEL = 'users.User'
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
 
 MIDDLEWARE = [
     'django_tenants.middleware.main.TenantMainMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     "apps.core.middleware.ModuleAccessMiddleware",
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -86,16 +89,7 @@ MIDDLEWARE = [
 
 TENANT_MODEL = "tenants.Company"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
-##AUTH_USER_MODEL = 'users.User'
 
-##CORS_ALLOWED_ORIGINS = [
-    ##"http://localhost:5173",
-##]
-## CORS_ALLOW_ALL_ORIGINS = True
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:5173",
-    "http://magicworldcomputers.localhost:5173",
-]
 
 TEMPLATES = [
     {
@@ -155,9 +149,9 @@ AUTH_PASSWORD_VALIDATORS = [
 # Internationalization
 # https://docs.djangoproject.com/en/6.0/topics/i18n/
 
-LANGUAGE_CODE = 'en-us'
+LANGUAGE_CODE = 'es'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'America/Guayaquil'
 
 USE_I18N = True
 
@@ -170,3 +164,6 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 PUBLIC_SCHEMA_NAME = "public"
+
+# Admin portal master key
+ADMIN_MASTER_KEY = os.getenv("ADMIN_MASTER_KEY", "change-me-in-production")

@@ -1,44 +1,22 @@
-# apps/users/models.py
-
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
-##class User(AbstractUser):
 
-    ##username = None  # remove default username
+class User(AbstractUser):
+    ROLE_CHOICES = [
+        ('admin', 'Administrador'),
+        ('manager', 'Gerente'),
+        ('employee', 'Empleado'),
+        ('client', 'Cliente'),
+    ]
 
-    ##ROLE_CHOICES = (
-        ##('admin', 'Admin'),
-        ##('employee', 'Employee'),
-        ##('client', 'Client'),
-    ##)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
+    phone = models.CharField(max_length=20, blank=True)
 
-    ##cedula_ruc = models.CharField(
-        ##max_length=20,
-        ##unique=True
-    ##)
+    class Meta:
+        db_table = 'users_user'
+        verbose_name = 'Usuario'
+        verbose_name_plural = 'Usuarios'
 
-    ##full_name = models.CharField(max_length=255)
-
-    ##mobile_phone = models.CharField(max_length=20)
-    ##landline_phone = models.CharField(max_length=20, blank=True)
-
-    ##address = models.TextField()
-
-    ##email = models.EmailField(
-        ##blank=True,
-        ##null=True,
-        ##unique=False
-    ##)
-
-    ##role = models.CharField(
-        ##max_length=20,
-        ##choices=ROLE_CHOICES,
-        ##default='client'
-    ##)
-
-    ##USERNAME_FIELD = 'cedula_ruc'
-    ##REQUIRED_FIELDS = ['full_name', 'mobile_phone', 'address']
-
-    ##def __str__(self):
-        ##return f"{self.full_name} ({self.role})"
+    def __str__(self):
+        return f"{self.get_full_name() or self.username} ({self.role})"
