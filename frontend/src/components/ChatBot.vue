@@ -80,7 +80,7 @@
 
 <script setup lang="ts">
 import { ref, nextTick, computed } from 'vue'
-import axios from 'axios'
+import api from '@/services/api'
 import { useAuthStore } from '@/stores/auth'
 
 const auth = useAuthStore()
@@ -160,7 +160,7 @@ async function enviarMensaje() {
   scrollAbajo()
 
   try {
-    const { data } = await axios.post('/api/chatbot/mensaje/', {
+    const { data } = await api.post('/chatbot/mensaje/', {
       mensaje: texto,
       session_id: sessionId.value,
     })
@@ -195,7 +195,7 @@ function enviarSugerencia(texto: string) {
 async function limpiarChat() {
   if (sessionId.value) {
     try {
-      await axios.delete(`/api/chatbot/historial/${sessionId.value}/limpiar/`)
+      await api.delete(`/chatbot/historial/${sessionId.value}/limpiar/`)
     } catch {}
   }
   mensajes.value = []

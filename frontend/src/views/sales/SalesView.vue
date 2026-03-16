@@ -32,7 +32,6 @@
 
     <!-- Filters -->
     <div class="filters-bar">
-      <input v-model="search" @input="debouncedLoad" type="search" placeholder="Buscar por descripción..." class="filter-input filter-search" />
       <input v-model="filters.fecha_inicio" @change="() => loadData(1)" type="date" class="filter-input" />
       <input v-model="filters.fecha_fin" @change="() => loadData(1)" type="date" class="filter-input" />
       <select v-model="filters.metodo_pago" @change="() => loadData(1)" class="filter-select">
@@ -51,9 +50,8 @@
         <thead>
           <tr>
             <th>Fecha</th>
-            <th>Descripción</th>
-            <th class="text-center">Cantidad</th>
-            <th class="text-right">Precio unit.</th>
+            <th>Cliente</th>
+            <th class="text-center">Ítems</th>
             <th class="text-right">Total</th>
             <th>Método de pago</th>
             <th class="text-center">Acciones</th>
@@ -62,9 +60,8 @@
         <tbody>
           <tr v-for="item in items" :key="item.id">
             <td class="font-mono">{{ item.fecha_venta }}</td>
-            <td>{{ item.descripcion }}</td>
-            <td class="text-center">{{ item.cantidad }}</td>
-            <td class="text-right">{{ fmt(item.precio_unitario_pub) }}</td>
+            <td>{{ item.client_name || '—' }}</td>
+            <td class="text-center">{{ item.items?.length ?? 0 }}</td>
             <td class="text-right font-semibold">{{ fmt(item.total) }}</td>
             <td><span class="badge badge-blue">{{ labelMetodo(item.metodo_pago) }}</span></td>
             <td class="text-center">
@@ -103,40 +100,18 @@
     <!-- Modal -->
     <Teleport to="body">
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-        <div class="modal">
+        <div class="modal modal-wide">
           <div class="modal-header">
             <h3 class="modal-title">{{ editingItem ? 'Editar venta' : 'Nueva venta' }}</h3>
             <button class="modal-close" @click="closeModal">✕</button>
           </div>
           <form @submit.prevent="saveItem" class="modal-form">
+
+            <!-- Cabecera de venta -->
             <div class="form-row">
               <div class="form-group">
                 <label class="form-label">Fecha *</label>
                 <input v-model="form.fecha_venta" type="date" class="form-input" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Cantidad *</label>
-                <input v-model.number="form.cantidad" type="number" min="1" class="form-input" required />
-              </div>
-            </div>
-            <div class="form-group">
-              <label class="form-label">Descripción *</label>
-              <input v-model="form.descripcion" type="text" class="form-input" required placeholder="Producto o servicio..." />
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Precio unitario (público) *</label>
-                <input v-model.number="form.precio_unitario_pub" type="number" step="0.01" min="0" class="form-input" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Precio unitario (empresa)</label>
-                <input v-model.number="form.precio_unitario_emp" type="number" step="0.01" min="0" class="form-input" />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Total *</label>
-                <input v-model.number="form.total" type="number" step="0.01" min="0" class="form-input" required />
               </div>
               <div class="form-group">
                 <label class="form-label">Método de pago *</label>
@@ -145,16 +120,86 @@
                 </select>
               </div>
             </div>
-            <div class="form-check">
-              <label class="check-label">
-                <input type="checkbox" v-model="form.es_feriado" />
-                Es feriado
-              </label>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Cliente (opcional)</label>
+                <select v-model="form.client" class="form-input">
+                  <option :value="null">Sin cliente asignado</option>
+                  <option v-for="c in clients" :key="c.id" :value="c.id">
+                    {{ c.first_name }} {{ c.last_name }} — {{ c.phone || c.username }}
+                  </option>
+                </select>
+              </div>
+              <div class="form-group" style="justify-content:flex-end;padding-bottom:4px">
+                <label class="check-label" style="margin-top:auto">
+                  <input type="checkbox" v-model="form.es_feriado" />
+                  Es feriado
+                </label>
+              </div>
             </div>
+
+            <!-- Ítems de venta -->
+            <div class="items-section">
+              <div class="items-header">
+                <span class="items-title">Productos / Servicios</span>
+                <button type="button" class="btn-add-item" @click="addItem">+ Agregar ítem</button>
+              </div>
+
+              <div v-if="form.items.length === 0" class="items-empty">
+                Agrega al menos un producto o servicio para registrar la venta.
+              </div>
+
+              <div v-else class="items-table-wrapper">
+                <table class="items-table">
+                  <thead>
+                    <tr>
+                      <th>Producto (opcional)</th>
+                      <th>Descripción *</th>
+                      <th style="width:70px">Cant.</th>
+                      <th style="width:110px">Precio unit.</th>
+                      <th style="width:110px">Subtotal</th>
+                      <th style="width:36px"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(it, idx) in form.items" :key="idx">
+                      <td>
+                        <select v-model="it.product" class="form-input form-input--sm" @change="onProductSelect(idx)">
+                          <option :value="null">— Libre —</option>
+                          <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
+                        </select>
+                      </td>
+                      <td>
+                        <input v-model="it.description" class="form-input form-input--sm" placeholder="Descripción..." required />
+                      </td>
+                      <td>
+                        <input v-model.number="it.quantity" type="number" min="1" class="form-input form-input--sm" @input="calcSubtotal(idx)" required />
+                      </td>
+                      <td>
+                        <input v-model.number="it.unit_price" type="number" step="0.01" min="0" class="form-input form-input--sm" @input="calcSubtotal(idx)" required />
+                      </td>
+                      <td class="subtotal-cell">{{ fmt(it.subtotal) }}</td>
+                      <td>
+                        <button type="button" class="btn-remove-item" @click="removeItem(idx)" title="Quitar">✕</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colspan="4" class="total-label">Total</td>
+                      <td class="total-value">{{ fmt(computedTotal) }}</td>
+                      <td></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
             <div v-if="formError" class="form-error">{{ formError }}</div>
             <div class="modal-footer">
               <button type="button" class="btn-secondary" @click="closeModal">Cancelar</button>
-              <button type="submit" class="btn-primary" :disabled="saving">
+              <button type="submit" class="btn-primary" :disabled="saving || form.items.length === 0">
                 <span v-if="saving" class="spinner-sm"></span>
                 {{ editingItem ? 'Guardar cambios' : 'Registrar venta' }}
               </button>
@@ -191,16 +236,38 @@ import { useToastStore } from '@/stores/toast'
 
 const toast = useToastStore()
 
+interface VentaItem {
+  id?: number
+  product: number | null
+  description: string
+  quantity: number
+  unit_price: number
+  subtotal: number
+}
+
 interface Venta {
   id: number
+  client: number | null
+  client_name: string | null
   fecha_venta: string
-  descripcion: string
-  cantidad: number
-  precio_unitario_pub: number
-  precio_unitario_emp: number | null
   total: number
   metodo_pago: string
   es_feriado: boolean
+  items: VentaItem[]
+}
+
+interface ClientUser {
+  id: number
+  username: string
+  first_name: string
+  last_name: string
+  phone: string
+}
+
+interface Product {
+  id: number
+  name: string
+  price: number
 }
 
 const items = ref<Venta[]>([])
@@ -210,7 +277,6 @@ const prevUrl = ref<string | null>(null)
 const currentPage = ref(1)
 const tableLoading = ref(false)
 const saving = ref(false)
-const search = ref('')
 const showModal = ref(false)
 const showConfirm = ref(false)
 const editingItem = ref<Venta | null>(null)
@@ -220,6 +286,9 @@ const formError = ref('')
 const summary = ref({ total: 0, transacciones: 0, promedio: 0 })
 const filters = ref({ fecha_inicio: '', fecha_fin: '', metodo_pago: '' })
 
+const clients = ref<ClientUser[]>([])
+const products = ref<Product[]>([])
+
 const metodoPagoOpts = [
   { value: 'efectivo', label: 'Efectivo' },
   { value: 'transferencia', label: 'Transferencia' },
@@ -228,20 +297,21 @@ const metodoPagoOpts = [
   { value: 'otro', label: 'Otro' },
 ]
 
-const emptyForm = (): Partial<Venta> & { es_feriado: boolean } => ({
+const emptyForm = () => ({
   fecha_venta: new Date().toISOString().split('T')[0],
-  descripcion: '',
-  cantidad: 1,
-  precio_unitario_pub: 0,
-  precio_unitario_emp: null,
-  total: 0,
   metodo_pago: 'efectivo',
+  client: null as number | null,
   es_feriado: false,
+  items: [] as VentaItem[],
 })
 const form = ref(emptyForm())
 
+const computedTotal = computed(() =>
+  form.value.items.reduce((acc, it) => acc + it.subtotal, 0),
+)
+
 const hasFilters = computed(() =>
-  !!search.value || !!filters.value.fecha_inicio || !!filters.value.fecha_fin || !!filters.value.metodo_pago,
+  !!filters.value.fecha_inicio || !!filters.value.fecha_fin || !!filters.value.metodo_pago,
 )
 const paginationText = computed(() => {
   const start = (currentPage.value - 1) * 20 + 1
@@ -249,17 +319,33 @@ const paginationText = computed(() => {
   return `${start}–${end} de ${count.value}`
 })
 
-let debounceTimer: ReturnType<typeof setTimeout>
-function debouncedLoad() {
-  clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => loadData(), 400)
+function addItem() {
+  form.value.items.push({ product: null, description: '', quantity: 1, unit_price: 0, subtotal: 0 })
+}
+
+function removeItem(idx: number) {
+  form.value.items.splice(idx, 1)
+}
+
+function calcSubtotal(idx: number) {
+  const it = form.value.items[idx]
+  it.subtotal = (it.quantity || 0) * (it.unit_price || 0)
+}
+
+function onProductSelect(idx: number) {
+  const it = form.value.items[idx]
+  const prod = products.value.find(p => p.id === it.product)
+  if (prod) {
+    it.description = prod.name
+    it.unit_price = prod.price
+    calcSubtotal(idx)
+  }
 }
 
 async function loadData(page = 1) {
   tableLoading.value = true
   currentPage.value = page
   const params = new URLSearchParams()
-  if (search.value) params.set('search', search.value)
   if (filters.value.fecha_inicio) params.set('fecha_inicio', filters.value.fecha_inicio)
   if (filters.value.fecha_fin) params.set('fecha_fin', filters.value.fecha_fin)
   if (filters.value.metodo_pago) params.set('metodo_pago', filters.value.metodo_pago)
@@ -281,6 +367,15 @@ async function loadData(page = 1) {
   }
 }
 
+async function loadAuxData() {
+  const [cli, prods] = await Promise.all([
+    api.get('/users/?role=client&page_size=200').catch(() => ({ data: { results: [] } })),
+    api.get('/inventory/products/?is_active=true&page_size=200').catch(() => ({ data: { results: [] } })),
+  ])
+  clients.value = Array.isArray(cli.data) ? cli.data : (cli.data.results ?? [])
+  products.value = Array.isArray(prods.data) ? prods.data : (prods.data.results ?? [])
+}
+
 function goPage(p: number) { loadData(p) }
 
 function fmt(v: number) {
@@ -292,7 +387,6 @@ function labelMetodo(v: string) {
 }
 
 function clearFilters() {
-  search.value = ''
   filters.value = { fecha_inicio: '', fecha_fin: '', metodo_pago: '' }
   loadData()
 }
@@ -306,7 +400,13 @@ function openCreate() {
 
 function openEdit(item: Venta) {
   editingItem.value = item
-  form.value = { ...item }
+  form.value = {
+    fecha_venta: item.fecha_venta,
+    metodo_pago: item.metodo_pago,
+    client: item.client,
+    es_feriado: item.es_feriado,
+    items: (item.items ?? []).map(it => ({ ...it, subtotal: it.subtotal })),
+  }
   formError.value = ''
   showModal.value = true
 }
@@ -319,20 +419,33 @@ function confirmDelete(item: Venta) {
 }
 
 async function saveItem() {
+  if (form.value.items.length === 0) {
+    formError.value = 'Agrega al menos un ítem a la venta.'
+    return
+  }
   formError.value = ''
   saving.value = true
   try {
+    const payload = {
+      ...form.value,
+      total: computedTotal.value,
+    }
     if (editingItem.value) {
-      await api.put(`/sales/ventas/${editingItem.value.id}/`, form.value)
+      await api.put(`/sales/ventas/${editingItem.value.id}/`, payload)
       toast.success('Venta actualizada correctamente')
     } else {
-      await api.post('/sales/ventas/', form.value)
+      await api.post('/sales/ventas/', payload)
       toast.success('Venta registrada correctamente')
     }
     closeModal()
     loadData(currentPage.value)
   } catch (e: any) {
-    formError.value = e.response?.data?.detail || 'Error al guardar. Verifica los datos.'
+    const err = e.response?.data
+    if (typeof err === 'object') {
+      formError.value = Object.values(err).flat().join(' ')
+    } else {
+      formError.value = 'Error al guardar. Verifica los datos.'
+    }
   } finally {
     saving.value = false
   }
@@ -353,9 +466,36 @@ async function deleteItem() {
   }
 }
 
-onMounted(() => loadData())
+onMounted(() => {
+  loadData()
+  loadAuxData()
+})
 </script>
 
 <style scoped>
 @import '@/assets/crud.css';
+
+.modal-wide { max-width: 820px; }
+
+.items-section { border: 1.5px solid #e2e8f0; border-radius: 12px; overflow: hidden; }
+.items-header { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+.items-title { font-size: 13px; font-weight: 700; color: #374151; text-transform: uppercase; letter-spacing: 0.04em; }
+.btn-add-item { padding: 6px 14px; background: #2563eb; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.btn-add-item:hover { background: #1d4ed8; }
+
+.items-empty { padding: 24px; text-align: center; font-size: 13px; color: #94a3b8; }
+
+.items-table-wrapper { overflow-x: auto; }
+.items-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.items-table th { padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+.items-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+.items-table tfoot td { border-top: 2px solid #e2e8f0; border-bottom: none; font-weight: 700; padding: 10px 10px; }
+
+.form-input--sm { padding: 6px 10px; font-size: 13px; }
+.subtotal-cell { font-weight: 600; color: #0f172a; font-size: 13px; }
+.total-label { text-align: right; color: #374151; font-size: 13px; }
+.total-value { color: #2563eb; font-size: 15px; }
+
+.btn-remove-item { background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 14px; padding: 4px 6px; border-radius: 6px; }
+.btn-remove-item:hover { color: #ef4444; background: #fef2f2; }
 </style>
