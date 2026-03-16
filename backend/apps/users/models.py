@@ -12,6 +12,7 @@ class User(AbstractUser):
 
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
     phone = models.CharField(max_length=20, blank=True)
+    cedula = models.CharField(max_length=13, blank=True, verbose_name='Cédula/RUC')
 
     class Meta:
         db_table = 'users_user'

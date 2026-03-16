@@ -40,4 +40,7 @@ urlpatterns = [
 
     # Chatbot
     path('api/chatbot/', include('apps.chatbot.urls')),
+
+    # Predicción de ventas ML
+    path('api/prediccion/', include('apps.prediccion.urls')),
 ]

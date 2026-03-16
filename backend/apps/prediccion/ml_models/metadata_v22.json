@@ -1,0 +1,135 @@
+{
+  "version": "v22_small_data_volatility_model",
+  "features_v22": [
+    "tavg",
+    "tmin",
+    "tmax",
+    "prcp",
+    "snow",
+    "wdir",
+    "wspd",
+    "wpgt",
+    "pres",
+    "tsun",
+    "is_holiday",
+    "is_pre_holiday",
+    "is_post_holiday",
+    "dayofweek",
+    "day",
+    "month",
+    "quarter",
+    "weekofyear",
+    "is_weekend",
+    "dow_sin",
+    "dow_cos",
+    "month_sin",
+    "month_cos",
+    "week_sin",
+    "week_cos",
+    "t",
+    "llovio",
+    "lluvia_fuerte",
+    "calor_alto",
+    "frio_bajo",
+    "llovio_finsemana",
+    "prcp_roll_mean_3",
+    "tavg_roll_mean_3",
+    "wspd_roll_mean_3",
+    "prcp_roll_mean_7",
+    "tavg_roll_mean_7",
+    "wspd_roll_mean_7",
+    "lag1",
+    "lag2",
+    "lag3",
+    "lag7",
+    "lag14",
+    "lag21",
+    "lag28",
+    "roll_mean_7",
+    "roll_std_7",
+    "roll_max_7",
+    "roll_min_7",
+    "roll_median_7",
+    "roll_mean_14",
+    "roll_std_14",
+    "roll_max_14",
+    "roll_min_14",
+    "roll_median_14",
+    "roll_mean_28",
+    "roll_std_28",
+    "roll_max_28",
+    "roll_min_28",
+    "roll_median_28",
+    "ema_7",
+    "ema_14",
+    "diff1",
+    "diff7",
+    "growth_1",
+    "growth_7",
+    "weak_demand_regime",
+    "high_volatility",
+    "shock_recent",
+    "tenant_id",
+    "anchor_base",
+    "ratio_to_anchor",
+    "ratio_to_anchor_log",
+    "lag1_low",
+    "lag7_low",
+    "low_demand_streak",
+    "days_since_peak",
+    "positive_pressure",
+    "positive_pressure_ema"
+  ],
+  "best_magic_v22": {
+    "weights": {
+      "pred_direct": 0.0,
+      "pred_ratio": 1.0,
+      "pred_global": 0.0
+    },
+    "score": 9.868502382370611,
+    "rmse": 11.409204430075588,
+    "mape": 8.700502625876014
+  },
+  "best_pap_v22": {
+    "weights": {
+      "pred_direct": 0.0,
+      "pred_ratio": 0.0,
+      "pred_global": 1.0
+    },
+    "score": 17.92272223839729,
+    "rmse": 8.231227142641558,
+    "mape": 16.87198003498099
+  },
+  "magic_calibrator_v22": {
+    "global_mult": 1.0749917347374947,
+    "seg_mult": {
+      "0_0": 1.0699846840551774,
+      "1_0": 1.08
+    }
+  },
+  "pap_calibrator_v22": {
+    "global_mult": 0.9125507854209705,
+    "seg_mult": {
+      "0_0": 0.9401135404525471,
+      "0_1": 0.925127702792207,
+      "1_0": 0.92,
+      "1_1": 0.92
+    }
+  },
+  "metrics": {
+    "magic": {
+      "rmse": 55.47305996916292,
+      "mae": 13.857702416277355,
+      "mape": 16.12046018674291,
+      "accuracy_mape": 83.87953981325708,
+      "accuracy_20": 80.0
+    },
+    "pap": {
+      "rmse": 10.253282751285418,
+      "mae": 7.87391450857569,
+      "mape": 14.874918889763341,
+      "accuracy_mape": 85.12508111023666,
+      "accuracy_20": 76.47058823529412
+    }
+  }
+}

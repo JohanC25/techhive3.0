@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -18,7 +19,15 @@ class ServiceTicket(models.Model):
     ]
 
     # Cliente
-    client_name = models.CharField(max_length=255, verbose_name='Cliente')
+    client = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        limit_choices_to={'role': 'client'},
+        related_name='tickets',
+        verbose_name='Cliente',
+    )
+    client_name = models.CharField(max_length=255, blank=True, verbose_name='Nombre cliente')
     client_phone = models.CharField(max_length=20, blank=True, verbose_name='Teléfono')
     client_email = models.EmailField(blank=True, verbose_name='Email')
 

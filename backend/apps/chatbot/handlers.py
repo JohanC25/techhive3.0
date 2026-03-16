@@ -49,7 +49,7 @@ def handle_saludo(**kwargs) -> str:
         "• 📊 **Ventas del día, semana o mes**\n"
         "• 🏆 **Productos más vendidos**\n"
         "• 📈 **Tendencias y comparaciones**\n"
-        "• 🔮 **Predicciones de ventas** (próximamente)\n\n"
+        "• 🔮 **Predicciones de ventas ML**\n\n"
         "¿Qué quieres consultar?"
     )
 
@@ -161,10 +161,12 @@ def handle_producto_mas_vendido(params: dict, **kwargs) -> str:
 
     try:
         resultado = query_tenant(
-            "SELECT descripcion, COUNT(*) as veces_vendido, SUM(total) as total_generado "
-            "FROM ventas_venta "
-            "WHERE DATE(fecha_venta) BETWEEN %s AND %s "
-            "GROUP BY descripcion "
+            "SELECT vi.description, SUM(vi.quantity) as veces_vendido, "
+            "SUM(vi.subtotal) as total_generado "
+            "FROM ventas_ventaitem vi "
+            "JOIN ventas_venta v ON v.id = vi.venta_id "
+            "WHERE DATE(v.fecha_venta) BETWEEN %s AND %s "
+            "GROUP BY vi.description "
             "ORDER BY total_generado DESC "
             "LIMIT 5",
             [fecha_inicio, fecha_fin]
@@ -174,13 +176,13 @@ def handle_producto_mas_vendido(params: dict, **kwargs) -> str:
             medallas = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
             for i, r in enumerate(resultado):
                 lineas.append(
-                    f"{medallas[i]} {r['descripcion']} — "
+                    f"{medallas[i]} {r['description']} — "
                     f"**{formatear_monto(r['total_generado'])}** "
-                    f"({r['veces_vendido']} ventas)"
+                    f"({r['veces_vendido']} unidades)"
                 )
             return '\n'.join(lineas)
         else:
-            return f"No se encontraron ventas {periodo_texto}."
+            return f"No se encontraron ítems de venta {periodo_texto}."
     except Exception as e:
         return _error_bd(str(e))
 
@@ -203,10 +205,11 @@ def handle_buscar_producto(params: dict, **kwargs) -> str:
 
     try:
         resultado = query_tenant(
-            "SELECT COUNT(*) as transacciones, SUM(total) as total_ventas "
-            "FROM ventas_venta "
-            "WHERE LOWER(descripcion) LIKE LOWER(%s) "
-            "AND DATE(fecha_venta) BETWEEN %s AND %s",
+            "SELECT COUNT(DISTINCT v.id) as transacciones, SUM(vi.subtotal) as total_ventas "
+            "FROM ventas_ventaitem vi "
+            "JOIN ventas_venta v ON v.id = vi.venta_id "
+            "WHERE LOWER(vi.description) LIKE LOWER(%s) "
+            "AND DATE(v.fecha_venta) BETWEEN %s AND %s",
             [f'%{producto}%', fecha_inicio, fecha_fin]
         )
         if resultado and resultado[0]['total_ventas']:
@@ -309,14 +312,141 @@ def handle_tendencia(**kwargs) -> str:
         return _error_bd(str(e))
 
 
-def handle_prediccion(**kwargs) -> str:
-    # Mock hasta que el modelo esté listo
-    return (
-        "🔮 **Predicción de ventas:**\n"
-        "El módulo predictivo está en desarrollo. Pronto podrás consultar "
-        "proyecciones de ventas para los próximos días y semanas.\n\n"
-        "_Mientras tanto puedes consultar tendencias históricas._"
-    )
+def handle_prediccion(params: dict = None, **kwargs) -> str:
+    """
+    Proyecta ventas usando el modelo ML CatBoost v22.
+    Extrae el horizonte del mensaje: día, semana (default) o mes.
+    """
+    texto = kwargs.get('texto', '')
+    from .router import normalizar
+    texto_n = normalizar(texto)
+
+    if any(p in texto_n for p in ['dia', 'manana', 'mañana']):
+        horizon = 1
+        label = 'mañana'
+    elif any(p in texto_n for p in ['mes', 'mensual', 'proximo mes']):
+        horizon = 30
+        label = 'el próximo mes'
+    else:
+        horizon = 7
+        label = 'la próxima semana'
+
+    try:
+        from django.db import connection as _conn
+        tenant_slug = _conn.schema_name
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=tenant_slug, horizon=horizon)
+
+        total = sum(p['prediccion'] for p in predicciones)
+        lineas = [f"🔮 **Proyección ML para {label}:**\n"]
+        for p in predicciones:
+            lineas.append(f"• {p['fecha']}: **{formatear_monto(p['prediccion'])}**")
+        if horizon > 1:
+            lineas.append(f"\n📊 **Total estimado: {formatear_monto(total)}**")
+        lineas.append("\n_Modelo CatBoost v22 entrenado con datos históricos de TechHive._")
+        return '\n'.join(lineas)
+
+    except ValueError as exc:
+        return (
+            "🔮 **Proyección de ventas:**\n"
+            f"No es posible generar una predicción: {exc}\n"
+            "_Se necesitan al menos 28 días de ventas registradas._"
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_caja(params: dict = None, **kwargs) -> str:
+    """
+    Consulta el balance de caja (ingresos, egresos, neto) para el período indicado.
+    Por defecto muestra el balance del día actual.
+    """
+    params = params or {}
+    fecha_inicio = params.get('fecha_inicio')
+    fecha_fin = params.get('fecha_fin')
+
+    hoy = date.today().strftime('%Y-%m-%d')
+    if not fecha_inicio:
+        fecha_inicio = fecha_fin = hoy
+        periodo_texto = 'hoy'
+    else:
+        periodo_texto = formatear_periodo(fecha_inicio, fecha_fin)
+
+    try:
+        movimientos = query_tenant(
+            "SELECT type, SUM(amount) as total FROM cash_movement "
+            "WHERE date BETWEEN %s AND %s GROUP BY type",
+            [fecha_inicio, fecha_fin]
+        )
+        ingresos = 0.0
+        egresos = 0.0
+        for r in movimientos:
+            if r['type'] == 'income':
+                ingresos = float(r['total'])
+            elif r['type'] == 'expense':
+                egresos = float(r['total'])
+
+        # Monto inicial de la sesión si el período es un solo día
+        monto_inicial = 0.0
+        if fecha_inicio == fecha_fin:
+            sesion = query_tenant(
+                "SELECT opening_amount FROM cash_session WHERE date = %s",
+                [fecha_inicio]
+            )
+            if sesion:
+                monto_inicial = float(sesion[0]['opening_amount'])
+
+        balance = monto_inicial + ingresos - egresos
+        emoji = '✅' if balance >= 0 else '⚠️'
+
+        lineas = [f"💰 **Balance de caja ({periodo_texto}):**\n"]
+        if monto_inicial:
+            lineas.append(f"• Apertura: **{formatear_monto(monto_inicial)}**")
+        lineas += [
+            f"• Ingresos: **{formatear_monto(ingresos)}**",
+            f"• Egresos: **{formatear_monto(egresos)}**",
+            f"• {emoji} Caja final: **{formatear_monto(balance)}**",
+        ]
+        return '\n'.join(lineas)
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_inventario_stock(params: dict = None, **kwargs) -> str:
+    """
+    Muestra productos con stock bajo (stock <= stock_min) del inventario.
+    """
+    try:
+        resultado = query_tenant(
+            "SELECT name, stock, stock_min, "
+            "COALESCE(c.name, 'Sin categoría') AS categoria "
+            "FROM inventory_product p "
+            "LEFT JOIN inventory_category c ON c.id = p.category_id "
+            "WHERE p.is_active = TRUE AND p.stock <= p.stock_min "
+            "ORDER BY p.stock ASC LIMIT 10",
+            []
+        )
+        total_bajo = query_tenant(
+            "SELECT COUNT(*) as total FROM inventory_product "
+            "WHERE is_active = TRUE AND stock <= stock_min",
+            []
+        )
+        n_total = total_bajo[0]['total'] if total_bajo else 0
+
+        if not resultado:
+            return "✅ **Stock al día:** todos los productos tienen stock suficiente."
+
+        lineas = [f"⚠️ **Productos con stock bajo ({n_total} en total):**\n"]
+        for r in resultado:
+            lineas.append(
+                f"• **{r['name']}** [{r['categoria']}] — "
+                f"Stock: {r['stock']} / Mínimo: {r['stock_min']}"
+            )
+        if n_total > 10:
+            lineas.append(f"\n_Mostrando los 10 más críticos de {n_total}._")
+        return '\n'.join(lineas)
+    except Exception as e:
+        return _error_bd(str(e))
 
 
 def handle_desconocido(texto: str, **kwargs) -> str:
@@ -352,6 +482,8 @@ HANDLERS = {
     'comparar_periodos': handle_comparar_periodos,
     'tendencia': handle_tendencia,
     'prediccion': handle_prediccion,
+    'caja_balance': handle_caja,
+    'inventario_stock': handle_inventario_stock,
     'desconocido': handle_desconocido,
 }
 

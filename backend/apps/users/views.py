@@ -23,6 +23,13 @@ class IsAdminOrManager(BasePermission):
 class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('username')
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        role = self.request.query_params.get('role')
+        if role:
+            qs = qs.filter(role=role)
+        return qs
+
     def get_serializer_class(self):
         if self.action == 'create':
             return UserCreateSerializer

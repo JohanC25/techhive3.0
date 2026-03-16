@@ -46,6 +46,31 @@ INTENT_PATTERNS = {
         r'va a vender',
         r'cuanto venderemos',
     ],
+    # ⚠️ caja_balance ANTES que ventas_por_periodo
+    'caja_balance': [
+        r'\bcaja\b',
+        r'\bbalance\b',
+        r'\bingresos?\b',
+        r'\begresos?\b',
+        r'cuanto.*caja',
+        r'total.*caja',
+        r'cierre.*caja',
+        r'apertura.*caja',
+        r'como.*caja',
+        r'movimientos? de caja',
+        r'flujo de caja',
+    ],
+    'inventario_stock': [
+        r'\b(inventario|stock)\b',
+        r'bajo stock',
+        r'sin stock',
+        r'agotado',
+        r'productos? (disponibles?|escasos?|faltantes?)',
+        r'cuanto.{0,15}(stock|inventario)',
+        r'que (productos?|articulos?).{0,20}(poco|bajo|quedan)',
+        r'reponer',
+        r'stock minimo',
+    ],
     # ⚠️ comparar ANTES que ventas_por_periodo
     'comparar_periodos': [
         r'\b(comparar|comparacion|versus|comparame|compara)\b',

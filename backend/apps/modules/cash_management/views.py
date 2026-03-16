@@ -1,12 +1,32 @@
-from rest_framework import viewsets, filters
+import datetime
+from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from django.db.models import Sum, Q
+from django.db.models import Sum
 
 from apps.core.permissions import IsNotClient
-from .models import CashMovement
-from .serializers import CashMovementSerializer
+from .models import CashMovement, CashSession
+from .serializers import CashMovementSerializer, CashSessionSerializer
+
+
+class CashSessionViewSet(viewsets.ModelViewSet):
+    queryset = CashSession.objects.all()
+    serializer_class = CashSessionSerializer
+    permission_classes = [IsAuthenticated, IsNotClient]
+
+    def perform_create(self, serializer):
+        serializer.save(opened_by=self.request.user)
+
+    @action(detail=False, methods=['get'], url_path='today')
+    def today(self, request):
+        """GET /api/cash/sessions/today/ — sesión de hoy o 404."""
+        hoy = datetime.date.today()
+        try:
+            session = CashSession.objects.get(date=hoy)
+            return Response(CashSessionSerializer(session).data)
+        except CashSession.DoesNotExist:
+            return Response({'detail': 'No hay sesión abierta para hoy.'}, status=status.HTTP_404_NOT_FOUND)
 
 
 class CashMovementViewSet(viewsets.ModelViewSet):
@@ -36,12 +56,28 @@ class CashMovementViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='balance')
     def balance(self, request):
-        """GET /api/cash/movements/balance/ — resumen de ingresos, egresos y balance"""
+        """GET /api/cash/movements/balance/ — ingresos, egresos, monto inicial y caja final."""
         qs = self.get_queryset()
         ingresos = qs.filter(type='income').aggregate(total=Sum('amount'))['total'] or 0
         egresos = qs.filter(type='expense').aggregate(total=Sum('amount'))['total'] or 0
+
+        # Obtener monto inicial: sesión del día filtrado (o hoy si no hay filtro)
+        monto_inicial = 0
+        try:
+            fecha_inicio = request.query_params.get('fecha_inicio')
+            session_date = (
+                datetime.date.fromisoformat(fecha_inicio)
+                if fecha_inicio
+                else datetime.date.today()
+            )
+            session = CashSession.objects.get(date=session_date)
+            monto_inicial = session.opening_amount
+        except (CashSession.DoesNotExist, ValueError):
+            pass
+
         return Response({
+            'monto_inicial': monto_inicial,
             'ingresos': ingresos,
             'egresos': egresos,
-            'balance': ingresos - egresos,
+            'caja_final': monto_inicial + ingresos - egresos,
         })
