@@ -135,16 +135,27 @@ INTENT_PATTERNS = {
 
 
 # ─────────────────────────────────────────────
-# DETECCIÓN DE DOS MESES (para comparación)
+# DETECCIÓN DE PARES MES+AÑO (para comparación)
 # ─────────────────────────────────────────────
 
-def detectar_dos_meses(texto: str) -> list:
-    """Retorna lista de hasta 2 nombres de meses encontrados en el texto."""
-    encontrados = []
-    for nombre in MESES:
-        if re.search(rf'\b{nombre}\b', texto):
-            encontrados.append(nombre)
-    return encontrados[:2]
+def detectar_pares_mes_año(texto: str) -> list:
+    """
+    Extrae todos los pares (mes, año_opcional) del texto en orden de aparición.
+
+    Ejemplos:
+      "enero 2025 y enero 2026"  → [("enero", 2025), ("enero", 2026)]
+      "compara enero con febrero" → [("enero", None), ("febrero", None)]
+      "enero 2025 vs febrero"    → [("enero", 2025), ("febrero", None)]
+      "ventas de enero"          → [("enero", None)]  ← solo 1, no es comparación
+    """
+    meses_pattern = '|'.join(MESES.keys())
+    # Captura: nombre_mes  opcionalmente seguido de un año de 4 dígitos
+    pattern = rf'\b({meses_pattern})\b(?:\s+(20\d{{2}}))?'
+    pares = []
+    for m in re.finditer(pattern, texto):
+        año = int(m.group(2)) if m.group(2) else None
+        pares.append((m.group(1), año))
+    return pares
 
 
 # ─────────────────────────────────────────────
@@ -232,20 +243,26 @@ def extraer_fechas(texto: str) -> dict:
 
 def extraer_dos_rangos(texto: str) -> dict:
     """
-    Para comparaciones, extrae dos rangos de fechas.
-    Ej: "compara octubre con noviembre" → rango1=oct, rango2=nov
+    Para comparaciones, extrae dos rangos de fechas con soporte para:
+      - Distintos meses mismo año:     "enero vs febrero"
+      - Mismo mes distintos años:      "enero 2025 vs enero 2026"
+      - Combinaciones mixtas:          "enero 2025 vs febrero 2026"
     """
     texto_n = normalizar(texto)
-    meses_encontrados = detectar_dos_meses(texto_n)
-    año_explicito = extraer_año_explicito(texto_n)
+    pares = detectar_pares_mes_año(texto_n)
 
     rangos = []
-    for nombre_mes in meses_encontrados:
+    # Determinar si los dos meses son iguales (necesitamos mostrar el año en el nombre)
+    mismo_mes = len(pares) >= 2 and pares[0][0] == pares[1][0]
+
+    for nombre_mes, año_explicito in pares[:2]:
         num_mes = MESES[nombre_mes]
         año = inferir_año(num_mes, año_explicito)
         inicio, fin = rango_mes(año, num_mes)
+        # Incluir año en el nombre si es el mismo mes o si se especificó explícitamente
+        nombre = f"{nombre_mes.capitalize()} {año}" if (mismo_mes or año_explicito) else nombre_mes.capitalize()
         rangos.append({
-            'nombre': nombre_mes,
+            'nombre': nombre,
             'fecha_inicio': inicio.strftime('%Y-%m-%d'),
             'fecha_fin': fin.strftime('%Y-%m-%d'),
         })
@@ -285,9 +302,9 @@ def detectar_intencion(texto: str) -> dict:
     intent_detectado = 'desconocido'
     confianza = 'baja'
 
-    # Caso especial: si hay dos meses en la frase → comparación
-    meses_en_texto = detectar_dos_meses(texto_normalizado)
-    if len(meses_en_texto) == 2:
+    # Caso especial: si hay dos o más pares mes(+año) → comparación
+    pares_mes_año = detectar_pares_mes_año(texto_normalizado)
+    if len(pares_mes_año) >= 2:
         intent_detectado = 'comparar_periodos'
         confianza = 'alta'
     else:
