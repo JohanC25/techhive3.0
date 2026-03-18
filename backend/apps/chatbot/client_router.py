@@ -23,6 +23,17 @@ CLIENT_INTENT_PATTERNS = {
         r'\b(ayuda|ayudame|que puedes hacer|para que sirves|como funciona|que haces|comandos)\b',
         r'\b(en que me ayudas|como te uso)\b',
     ],
+    # horarios_contacto ANTES que listar_categorias y verificar_disponibilidad
+    # para capturar "que horario tienen" antes de que listar_categorias intercepte
+    'horarios_contacto': [
+        r'\bhorario\b',
+        r'a\s+que\s+hora',
+        r'como\s+(?:los\s+)?contact(?:o|an)',
+        r'telefono\s+de\s+(?:contacto|la\s+tienda|la\s+empresa|ustedes)',
+        r'whatsapp\s+de\s+(?:la\s+tienda|la\s+empresa|contacto|ustedes)',
+        r'donde\s+estan\s+ubicados?',
+        r'direccion\s+de\s+la\s+(?:tienda|empresa)',
+    ],
     'listar_categorias': [
         r'\b(categorias|tipos de producto|que productos tienen|que tipo de productos)\b',
         r'\b(cuales son las categorias|ver categorias|mostrar categorias|lineas de productos)\b',
@@ -50,6 +61,7 @@ CLIENT_INTENT_PATTERNS = {
 PRIORITY_ORDER = [
     'saludo',
     'ayuda',
+    'horarios_contacto',        # antes de listar_categorias para capturar "que horario tienen"
     'listar_categorias',
     'consultar_precio',
     'verificar_disponibilidad',

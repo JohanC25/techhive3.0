@@ -75,7 +75,8 @@ def handle_saludo_cliente(**kwargs) -> str:
         "• 🔍 **Buscar productos** en nuestro catálogo\n"
         "• 💰 **Consultar precios** de cualquier artículo\n"
         "• ✅ **Verificar disponibilidad** de stock\n"
-        "• 📦 **Explorar categorías** de productos\n\n"
+        "• 📦 **Explorar categorías** de productos\n"
+        "• 🕐 **Consultar horarios** y datos de contacto\n\n"
         "¿Qué estás buscando hoy?"
     )
 
@@ -94,7 +95,10 @@ def handle_ayuda_cliente(**kwargs) -> str:
         "• \"Busca impresoras\"\n\n"
         "📦 *Categorías:*\n"
         "• \"¿Qué categorías tienen?\"\n"
-        "• \"¿Qué tipo de productos venden?\""
+        "• \"¿Qué tipo de productos venden?\"\n\n"
+        "🕐 *Horarios y contacto:*\n"
+        "• \"¿A qué hora abren?\"\n"
+        "• \"¿Cómo los contacto?\""
     )
 
 
@@ -202,6 +206,37 @@ def handle_listar_categorias(**kwargs) -> str:
     return '\n'.join(lineas)
 
 
+def handle_horarios_contacto(**kwargs) -> str:
+    """
+    Responde sobre horarios de atención y contacto del tenant activo.
+    Intenta obtener el nombre de la empresa desde el schema público.
+    Si los datos de contacto no están configurados, devuelve un fallback genérico.
+    """
+    empresa = "nuestra empresa"
+    try:
+        from django.db import connection as conn
+        schema = conn.schema_name
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT name FROM public.tenants_company WHERE schema_name = %s",
+                [schema]
+            )
+            row = cur.fetchone()
+            if row:
+                empresa = row[0]
+    except Exception:
+        pass
+
+    return (
+        f"Para conocer los **horarios de atención** y datos de contacto de **{empresa}**, "
+        "te recomendamos comunicarte directamente con nosotros.\n\n"
+        "Mientras tanto, puedo ayudarte con:\n"
+        "• 💰 Consultar precios de productos\n"
+        "• ✅ Verificar disponibilidad\n"
+        "• 🔍 Buscar en nuestro catálogo"
+    )
+
+
 def handle_desconocido_cliente(texto: str, **kwargs) -> str:
     return (
         f"No entendí bien tu consulta: *\"{texto}\"*\n\n"
@@ -221,6 +256,7 @@ def handle_desconocido_cliente(texto: str, **kwargs) -> str:
 CLIENT_HANDLERS = {
     'saludo':                   handle_saludo_cliente,
     'ayuda':                    handle_ayuda_cliente,
+    'horarios_contacto':        handle_horarios_contacto,
     'consultar_precio':         handle_consultar_precio,
     'verificar_disponibilidad': handle_verificar_disponibilidad,
     'buscar_catalogo':          handle_buscar_catalogo,
