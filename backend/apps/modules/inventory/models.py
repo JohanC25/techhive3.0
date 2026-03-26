@@ -16,9 +16,27 @@ class Category(models.Model):
         return self.name
 
 
+class Shelf(models.Model):
+    name = models.CharField(max_length=100, unique=True, verbose_name='Nombre de percha')
+    location = models.CharField(max_length=255, blank=True, verbose_name='Ubicación')
+
+    class Meta:
+        db_table = 'inventory_shelf'
+        verbose_name = 'Percha'
+        verbose_name_plural = 'Perchas'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class Product(models.Model):
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True, blank=True, related_name='products'
+    )
+    shelf = models.ForeignKey(
+        Shelf, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='products', verbose_name='Percha'
     )
     name = models.CharField(max_length=255)
     sku = models.CharField(max_length=100, unique=True, blank=True)

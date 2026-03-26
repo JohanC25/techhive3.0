@@ -23,6 +23,17 @@ CLIENT_INTENT_PATTERNS = {
         r'\b(ayuda|ayudame|que puedes hacer|para que sirves|como funciona|que haces|comandos)\b',
         r'\b(en que me ayudas|como te uso)\b',
     ],
+    # horarios_contacto ANTES que listar_categorias y verificar_disponibilidad
+    # para capturar "que horario tienen" antes de que listar_categorias intercepte
+    'horarios_contacto': [
+        r'\bhorario\b',
+        r'a\s+que\s+hora',
+        r'como\s+(?:los\s+)?contact(?:o|an)',
+        r'telefono\s+de\s+(?:contacto|la\s+tienda|la\s+empresa|ustedes)',
+        r'whatsapp\s+de\s+(?:la\s+tienda|la\s+empresa|contacto|ustedes)',
+        r'donde\s+estan\s+ubicados?',
+        r'direccion\s+de\s+la\s+(?:tienda|empresa)',
+    ],
     'listar_categorias': [
         r'\b(categorias|tipos de producto|que productos tienen|que tipo de productos)\b',
         r'\b(cuales son las categorias|ver categorias|mostrar categorias|lineas de productos)\b',
@@ -30,9 +41,9 @@ CLIENT_INTENT_PATTERNS = {
     ],
     # Precio ANTES que disponibilidad y buscar_catalogo (más específico)
     'consultar_precio': [
-        r'\b(cuanto cuesta|cuanto vale|cuanto sale|cual es el precio|precio de|precio del|cuanto es)\b',
+        r'\b(cuanto cuesta|cuanto cuestan|cuanto vale|cuanto valen|cuanto sale|cuanto salen|cual es el precio|precio de|precio del|cuanto es)\b',
         r'\bprecio\b.{0,20}\bde\b',
-        r'\bcuanto.{0,10}(cuesta|vale|sale)\b',
+        r'\bcuanto.{0,10}(cuesta|cuestan|vale|valen|sale)\b',
     ],
     'verificar_disponibilidad': [
         r'\b(hay|tienen|tienes|existe|lo tienen|lo tienes|cuentan con)\b.{1,40}',
@@ -50,6 +61,7 @@ CLIENT_INTENT_PATTERNS = {
 PRIORITY_ORDER = [
     'saludo',
     'ayuda',
+    'horarios_contacto',        # antes de listar_categorias para capturar "que horario tienen"
     'listar_categorias',
     'consultar_precio',
     'verificar_disponibilidad',
@@ -65,8 +77,9 @@ def extraer_nombre_producto_cliente(texto: str) -> str | None:
     """Extrae el nombre del producto de una consulta de cliente."""
     texto_n = normalizar(texto)
     patrones = [
-        r'cuanto cuesta (?:el |la |los |las |un |una )?(.+)',
-        r'cuanto vale (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto cuesta(?:n)? (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto vale(?:n)? (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto sale(?:n)? (?:el |la |los |las |un |una )?(.+)',
         r'precio de(?:l)? (?:el |la |los |las |un |una )?(.+)',
         r'hay (?:el |la |los |las |un |una )?(.+)',
         r'tienen (?:el |la |los |las |un |una )?(.+)',
@@ -94,6 +107,8 @@ def extraer_nombre_producto_cliente(texto: str) -> str | None:
                 '', nombre
             ).strip()
             nombre = re.sub(r'\s+', ' ', nombre).strip()
+            nombre = re.sub(r'[?!.,;:"\']+$', '', nombre).strip()       # puntuación final
+            nombre = re.sub(r'^(dentro de|en la|en el|de la|del|de los|de las|en)\s+', '', nombre).strip()  # prefijos basura
             if len(nombre) > 2:
                 return nombre
     return None

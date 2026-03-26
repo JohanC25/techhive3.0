@@ -13,8 +13,19 @@
       </button>
     </div>
 
+    <!-- Session banner -->
+    <div v-if="session" class="session-banner">
+      <span>Caja abierta el {{ session.date }}</span>
+      <span>Monto inicial: <strong>${{ Number(session.opening_amount).toFixed(2) }}</strong></span>
+      <span v-if="session.opened_by_name">Por: {{ session.opened_by_name }}</span>
+    </div>
+
     <!-- Balance strip -->
     <div class="balance-strip">
+      <div class="balance-card balance-blue">
+        <div class="balance-label">Monto inicial</div>
+        <div class="balance-value">{{ fmt(balance.monto_inicial) }}</div>
+      </div>
       <div class="balance-card balance-green">
         <div class="balance-label">Ingresos</div>
         <div class="balance-value">{{ fmt(balance.ingresos) }}</div>
@@ -23,9 +34,9 @@
         <div class="balance-label">Egresos</div>
         <div class="balance-value">{{ fmt(balance.egresos) }}</div>
       </div>
-      <div class="balance-card" :class="balance.balance >= 0 ? 'balance-blue' : 'balance-red'">
-        <div class="balance-label">Balance neto</div>
-        <div class="balance-value">{{ fmt(balance.balance) }}</div>
+      <div class="balance-card" :class="balance.caja_final >= 0 ? 'balance-blue' : 'balance-red'">
+        <div class="balance-label">Caja final</div>
+        <div class="balance-value">{{ fmt(balance.caja_final) }}</div>
       </div>
     </div>
 
@@ -158,6 +169,28 @@
           </div>
         </div>
       </div>
+
+      <!-- Session modal — not closeable by clicking outside -->
+      <div v-if="showSessionModal" class="modal-overlay">
+        <div class="modal">
+          <div class="modal-header">
+            <h2 class="modal-title">Apertura de caja</h2>
+          </div>
+          <div class="modal-form">
+            <p style="font-size:14px;color:#64748b;margin:0">Para comenzar el día, ingresa el monto inicial en caja.</p>
+            <div class="form-group">
+              <label class="form-label">Monto inicial *</label>
+              <input v-model="sessionAmount" type="number" min="0" step="0.01" class="form-input" placeholder="0.00" required />
+            </div>
+            <div class="modal-actions">
+              <button class="btn-primary" :disabled="savingSession || !sessionAmount" @click="openSession">
+                <span v-if="savingSession" class="spinner"></span>
+                <span v-else>Abrir caja</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     </Teleport>
   </div>
 </template>
@@ -170,13 +203,25 @@ import { useToastStore } from '@/stores/toast'
 const toast = useToastStore()
 
 interface Movement { id: number; type: string; category: string; description: string; amount: number; date: string; notes: string }
+interface CashSession {
+  id: number
+  date: string
+  opening_amount: number
+  opened_by_name: string | null
+  closed_at: string | null
+  created_at: string
+}
 
 const items = ref<Movement[]>([])
 const count = ref(0); const nextUrl = ref<string | null>(null); const prevUrl = ref<string | null>(null)
 const currentPage = ref(1)
 const tableLoading = ref(false); const saving = ref(false)
 const search = ref(''); const filters = ref({ type: '', category: '', fecha_inicio: '', fecha_fin: '' })
-const balance = ref({ ingresos: 0, egresos: 0, balance: 0 })
+const balance = ref({ monto_inicial: 0, ingresos: 0, egresos: 0, balance: 0, caja_final: 0 })
+const session = ref<CashSession | null>(null)
+const showSessionModal = ref(false)
+const sessionAmount = ref('')
+const savingSession = ref(false)
 const showModal = ref(false); const showConfirm = ref(false)
 const editingItem = ref<Movement | null>(null); const deletingItem = ref<Movement | null>(null)
 const formError = ref('')
@@ -218,8 +263,42 @@ async function loadData(page = 1) {
     ])
     items.value = list.data.results; count.value = list.data.count
     nextUrl.value = list.data.next; prevUrl.value = list.data.previous
-    balance.value = bal.data
+    balance.value = {
+      monto_inicial: bal.data.monto_inicial ?? 0,
+      ingresos: bal.data.ingresos ?? 0,
+      egresos: bal.data.egresos ?? 0,
+      balance: bal.data.balance ?? 0,
+      caja_final: bal.data.caja_final ?? 0,
+    }
   } catch { toast.error('Error al cargar movimientos') } finally { tableLoading.value = false }
+}
+
+function loadBalance() { loadData(currentPage.value) }
+
+async function checkSession() {
+  try {
+    const { data } = await api.get('/cash/sessions/today/')
+    session.value = data
+  } catch {
+    // No hay sesión hoy — mostrar modal de apertura
+    showSessionModal.value = true
+  }
+}
+
+async function openSession() {
+  if (!sessionAmount.value || parseFloat(sessionAmount.value) < 0) return
+  savingSession.value = true
+  try {
+    const { data } = await api.post('/cash/sessions/', {
+      date: new Date().toISOString().split('T')[0],
+      opening_amount: parseFloat(sessionAmount.value),
+    })
+    session.value = data
+    showSessionModal.value = false
+    loadBalance()
+  } finally {
+    savingSession.value = false
+  }
 }
 
 function goPage(p: number) { loadData(p) }
@@ -245,7 +324,7 @@ async function deleteItem() {
   catch { toast.error('Error al eliminar') } finally { saving.value = false }
 }
 
-onMounted(() => loadData())
+onMounted(() => { checkSession(); loadData() })
 </script>
 
 <style scoped>
@@ -257,4 +336,5 @@ onMounted(() => loadData())
 .balance-green { background: #ecfdf5; color: #065f46; }
 .balance-red   { background: #fef2f2; color: #991b1b; }
 .balance-blue  { background: #eff6ff; color: #1e40af; }
+.session-banner { display: flex; gap: 20px; padding: 10px 16px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; font-size: 13px; color: #1d4ed8; flex-wrap: wrap; }
 </style>

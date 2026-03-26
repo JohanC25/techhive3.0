@@ -23,7 +23,7 @@
 
     <!-- Filters -->
     <div class="filters-bar">
-      <input v-model="search" @input="debouncedLoad" type="search" placeholder="Buscar cliente, equipo, teléfono..." class="filter-input filter-search" />
+      <input v-model="search" @input="debouncedLoad" type="search" placeholder="Buscar cliente, equipo..." class="filter-input filter-search" />
       <select v-model="filters.status" @change="() => loadData(1)" class="filter-select">
         <option value="">Todos los estados</option>
         <option v-for="s in statusOpts" :key="s.value" :value="s.value">{{ s.label }}</option>
@@ -93,6 +93,7 @@
       </div>
     </div>
 
+    <!-- Main modal -->
     <Teleport to="body">
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
         <div class="modal" style="max-width:720px">
@@ -101,13 +102,28 @@
             <button class="modal-close" @click="closeModal">✕</button>
           </div>
           <form @submit.prevent="saveItem" class="modal-form">
+
             <!-- Sección cliente -->
-            <div class="form-section-title">Datos del cliente</div>
-            <div class="form-row">
-              <div class="form-group"><label class="form-label">Nombre del cliente *</label><input v-model="form.client_name" type="text" class="form-input" required /></div>
-              <div class="form-group"><label class="form-label">Teléfono</label><input v-model="form.client_phone" type="text" class="form-input" /></div>
+            <div class="form-section-title">Cliente *</div>
+            <div class="form-group">
+              <label class="form-label">Seleccionar cliente *</label>
+              <div style="display:flex;gap:8px;align-items:center">
+                <select v-model="form.client" class="form-input" required @change="onClientSelect" style="flex:1">
+                  <option :value="null" disabled>-- Seleccione un cliente --</option>
+                  <option v-for="c in clients" :key="c.id" :value="c.id">
+                    {{ c.first_name }} {{ c.last_name }} — {{ c.phone || c.username }}
+                  </option>
+                </select>
+                <button type="button" class="btn-secondary" style="white-space:nowrap" @click="openCreateClient">
+                  + Nuevo cliente
+                </button>
+              </div>
             </div>
-            <div class="form-group"><label class="form-label">Email</label><input v-model="form.client_email" type="email" class="form-input" /></div>
+            <div v-if="selectedClientInfo" class="client-info-box">
+              <span><strong>Nombre:</strong> {{ selectedClientInfo.first_name }} {{ selectedClientInfo.last_name }}</span>
+              <span v-if="selectedClientInfo.phone"><strong>Tel:</strong> {{ selectedClientInfo.phone }}</span>
+              <span v-if="selectedClientInfo.email"><strong>Email:</strong> {{ selectedClientInfo.email }}</span>
+            </div>
 
             <!-- Sección equipo -->
             <div class="form-section-title">Equipo</div>
@@ -157,6 +173,33 @@
         </div>
       </div>
 
+      <!-- Quick create client modal -->
+      <div v-if="showClientModal" class="modal-overlay" @click.self="showClientModal = false">
+        <div class="modal" style="max-width:480px">
+          <div class="modal-header">
+            <h3 class="modal-title">Nuevo cliente</h3>
+            <button class="modal-close" @click="showClientModal = false">✕</button>
+          </div>
+          <form @submit.prevent="saveNewClient" class="modal-form">
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Nombre *</label><input v-model="clientForm.first_name" type="text" class="form-input" required /></div>
+              <div class="form-group"><label class="form-label">Apellido *</label><input v-model="clientForm.last_name" type="text" class="form-input" required /></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group"><label class="form-label">Cédula</label><input v-model="clientForm.cedula" type="text" class="form-input" /></div>
+              <div class="form-group"><label class="form-label">Teléfono *</label><input v-model="clientForm.phone" type="text" class="form-input" required /></div>
+            </div>
+            <div class="form-group"><label class="form-label">Email</label><input v-model="clientForm.email" type="email" class="form-input" /></div>
+            <div v-if="clientFormError" class="form-error">{{ clientFormError }}</div>
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" @click="showClientModal = false">Cancelar</button>
+              <button type="submit" class="btn-primary" :disabled="savingClient"><span v-if="savingClient" class="spinner-sm"></span>Crear cliente</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Delete confirm -->
       <div v-if="showConfirm" class="modal-overlay" @click.self="showConfirm = false">
         <div class="modal modal-sm">
           <div class="modal-header"><h3 class="modal-title">Confirmar eliminación</h3><button class="modal-close" @click="showConfirm = false">✕</button></div>
@@ -179,22 +222,29 @@ import { useToastStore } from '@/stores/toast'
 const toast = useToastStore()
 
 interface Ticket {
-  id: number; client_name: string; client_phone: string; client_email: string
+  id: number; client: number | null
+  client_name: string; client_phone: string; client_email: string
   device: string; serial_number: string; accessories: string
   problem: string; diagnosis: string; solution: string
   estimated_cost: number | null; final_cost: number | null
   status: string; priority: string; received_at: string; promised_at: string | null; completed_at: string | null
 }
 
+interface Client {
+  id: number; username: string; first_name: string; last_name: string
+  phone: string; email: string; cedula: string
+}
+
 const items = ref<Ticket[]>([])
+const clients = ref<Client[]>([])
 const statusSummary = ref<Array<{ status: string; total: number }>>([])
 const count = ref(0); const nextUrl = ref<string | null>(null); const prevUrl = ref<string | null>(null)
 const currentPage = ref(1)
-const tableLoading = ref(false); const saving = ref(false)
+const tableLoading = ref(false); const saving = ref(false); const savingClient = ref(false)
 const search = ref(''); const filters = ref({ status: '', priority: '' })
-const showModal = ref(false); const showConfirm = ref(false)
+const showModal = ref(false); const showConfirm = ref(false); const showClientModal = ref(false)
 const editingItem = ref<Ticket | null>(null); const deletingItem = ref<Ticket | null>(null)
-const formError = ref('')
+const formError = ref(''); const clientFormError = ref('')
 
 const statusOpts = [
   { value: 'pending', label: 'Pendiente' }, { value: 'in_progress', label: 'En proceso' },
@@ -206,13 +256,28 @@ const priorityOpts = [
   { value: 'high', label: 'Alta' }, { value: 'urgent', label: 'Urgente' },
 ]
 
-const emptyForm = (): Partial<Ticket> => ({
-  client_name: '', client_phone: '', client_email: '', device: '', serial_number: '',
-  accessories: '', problem: '', diagnosis: '', solution: '',
+interface TicketForm {
+  client: number | null; device: string; serial_number: string; accessories: string
+  problem: string; diagnosis: string; solution: string
+  estimated_cost: number | null; final_cost: number | null
+  status: string; priority: string; promised_at: string | null; completed_at: string | null
+}
+
+const emptyForm = (): TicketForm => ({
+  client: null, device: '', serial_number: '', accessories: '',
+  problem: '', diagnosis: '', solution: '',
   estimated_cost: null, final_cost: null, status: 'pending', priority: 'medium',
   promised_at: null, completed_at: null,
 })
-const form = ref(emptyForm())
+const form = ref<TicketForm>(emptyForm())
+
+const emptyClientForm = () => ({ first_name: '', last_name: '', cedula: '', phone: '', email: '' })
+const clientForm = ref(emptyClientForm())
+
+const selectedClientInfo = computed(() => {
+  if (!form.value.client) return null
+  return clients.value.find(c => c.id === form.value.client) ?? null
+})
 
 const paginationText = computed(() => {
   const s = (currentPage.value - 1) * 20 + 1; const e = Math.min(currentPage.value * 20, count.value)
@@ -229,6 +294,7 @@ function priorityBadge(s: string) {
   return { low: 'badge badge-gray', medium: 'badge badge-blue', high: 'badge badge-orange', urgent: 'badge badge-red' }[s] ?? 'badge badge-gray'
 }
 function fmt(v: number) { return `$${Number(v || 0).toLocaleString('es-EC', { minimumFractionDigits: 2 })}` }
+function onClientSelect() { /* selectedClientInfo computed auto-updates */ }
 
 let debounceTimer: ReturnType<typeof setTimeout>
 function debouncedLoad() { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => loadData(), 400) }
@@ -251,30 +317,78 @@ async function loadData(page = 1) {
   } catch { toast.error('Error al cargar tickets') } finally { tableLoading.value = false }
 }
 
+async function loadClients() {
+  try {
+    const res = await api.get('/users/?role=client&page_size=1000')
+    clients.value = res.data.results ?? res.data
+  } catch { /* silently fail */ }
+}
+
 function goPage(p: number) { loadData(p) }
-function openCreate() { editingItem.value = null; form.value = emptyForm(); formError.value = ''; showModal.value = true }
-function openEdit(item: Ticket) { editingItem.value = item; form.value = { ...item }; formError.value = ''; showModal.value = true }
+
+function openCreate() {
+  editingItem.value = null; form.value = emptyForm(); formError.value = ''; showModal.value = true
+}
+function openEdit(item: Ticket) {
+  editingItem.value = item
+  form.value = {
+    client: item.client, device: item.device, serial_number: item.serial_number,
+    accessories: item.accessories, problem: item.problem, diagnosis: item.diagnosis,
+    solution: item.solution, estimated_cost: item.estimated_cost, final_cost: item.final_cost,
+    status: item.status, priority: item.priority, promised_at: item.promised_at, completed_at: item.completed_at,
+  }
+  formError.value = ''; showModal.value = true
+}
 function closeModal() { showModal.value = false }
 function confirmDelete(item: Ticket) { deletingItem.value = item; showConfirm.value = true }
+
+function openCreateClient() {
+  clientForm.value = emptyClientForm(); clientFormError.value = ''; showClientModal.value = true
+}
+
+async function saveNewClient() {
+  clientFormError.value = ''; savingClient.value = true
+  try {
+    const payload = { ...clientForm.value, role: 'client', password: `Temp${clientForm.value.cedula || '1234'}!` }
+    const res = await api.post('/users/', payload)
+    const newClient: Client = res.data
+    clients.value.push(newClient)
+    form.value.client = newClient.id
+    showClientModal.value = false
+    toast.success('Cliente creado')
+  } catch (e: any) {
+    const d = e.response?.data
+    clientFormError.value = typeof d === 'string' ? d : Object.values(d || {}).flat().join(' ') || 'Error al crear cliente'
+  } finally { savingClient.value = false }
+}
 
 async function saveItem() {
   formError.value = ''; saving.value = true
   try {
-    if (editingItem.value) { await api.put(`/technical-service/tickets/${editingItem.value.id}/`, form.value); toast.success('Ticket actualizado') }
-    else { await api.post('/technical-service/tickets/', form.value); toast.success('Ticket creado') }
+    if (editingItem.value) {
+      await api.put(`/technical-service/tickets/${editingItem.value.id}/`, form.value)
+      toast.success('Ticket actualizado')
+    } else {
+      await api.post('/technical-service/tickets/', form.value)
+      toast.success('Ticket creado')
+    }
     closeModal(); loadData(currentPage.value)
-  } catch (e: any) { formError.value = e.response?.data?.detail || 'Error al guardar' }
-  finally { saving.value = false }
+  } catch (e: any) {
+    const d = e.response?.data
+    formError.value = typeof d === 'string' ? d : d?.detail || Object.values(d || {}).flat().join(' ') || 'Error al guardar'
+  } finally { saving.value = false }
 }
 
 async function deleteItem() {
   if (!deletingItem.value) return
   saving.value = true
-  try { await api.delete(`/technical-service/tickets/${deletingItem.value.id}/`); toast.success('Ticket eliminado'); showConfirm.value = false; loadData(currentPage.value) }
-  catch { toast.error('Error al eliminar') } finally { saving.value = false }
+  try {
+    await api.delete(`/technical-service/tickets/${deletingItem.value.id}/`)
+    toast.success('Ticket eliminado'); showConfirm.value = false; loadData(currentPage.value)
+  } catch { toast.error('Error al eliminar') } finally { saving.value = false }
 }
 
-onMounted(() => loadData())
+onMounted(() => { loadData(); loadClients() })
 </script>
 
 <style scoped>
@@ -290,4 +404,5 @@ onMounted(() => loadData())
 .sc-delivered     { border-left: 3px solid #7c3aed; }
 .sc-cancelled     { border-left: 3px solid #dc2626; }
 .form-section-title { font-size: 13px; font-weight: 700; color: #2563eb; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; margin-top: 4px; }
+.client-info-box { display: flex; gap: 16px; flex-wrap: wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #475569; margin-top: -4px; }
 </style>

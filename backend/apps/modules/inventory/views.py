@@ -4,8 +4,8 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from apps.core.permissions import IsNotClient
-from .models import Category, Product
-from .serializers import CategorySerializer, ProductSerializer
+from .models import Category, Shelf, Product
+from .serializers import CategorySerializer, ShelfSerializer, ProductSerializer
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -16,8 +16,16 @@ class CategoryViewSet(viewsets.ModelViewSet):
     search_fields = ['name']
 
 
+class ShelfViewSet(viewsets.ModelViewSet):
+    queryset = Shelf.objects.all()
+    serializer_class = ShelfSerializer
+    permission_classes = [IsAuthenticated, IsNotClient]
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['name', 'location']
+
+
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.select_related('category').all()
+    queryset = Product.objects.select_related('category', 'shelf').all()
     serializer_class = ProductSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'sku', 'description']

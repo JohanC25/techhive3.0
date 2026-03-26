@@ -51,7 +51,7 @@ class CompanyListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        companies = Company.objects.prefetch_related("domains", "modules").all()
+        companies = Company.objects.prefetch_related("domains", "modules").exclude(schema_name="public")
         data = []
         for c in companies:
             primary = c.domains.filter(is_primary=True).first()

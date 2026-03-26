@@ -49,7 +49,9 @@ def handle_saludo(**kwargs) -> str:
         "• 📊 **Ventas del día, semana o mes**\n"
         "• 🏆 **Productos más vendidos**\n"
         "• 📈 **Tendencias y comparaciones**\n"
-        "• 🔮 **Predicciones de ventas** (próximamente)\n\n"
+        "• 🔮 **Predicciones de ventas ML**\n"
+        "• 🛒 **Recomendación de compra a proveedores**\n"
+        "• ⚠️ **Alertas de demanda inusual**\n\n"
         "¿Qué quieres consultar?"
     )
 
@@ -68,7 +70,13 @@ def handle_ayuda(**kwargs) -> str:
         "• \"Compara enero vs febrero\"\n"
         "• \"¿Cómo van las ventas este mes?\"\n\n"
         "🔮 *Predicciones:*\n"
-        "• \"¿Cuánto vamos a vender la próxima semana?\""
+        "• \"¿Cuánto vamos a vender la próxima semana?\"\n\n"
+        "🛒 *Compras:*\n"
+        "• \"¿Qué debo pedir al proveedor?\"\n"
+        "• \"¿Qué productos reabastecer?\"\n\n"
+        "⚠️ *Alertas de demanda:*\n"
+        "• \"¿Hay alguna anomalía en las ventas?\"\n"
+        "• \"¿Las ventas están por debajo de lo esperado?\""
     )
 
 
@@ -161,10 +169,12 @@ def handle_producto_mas_vendido(params: dict, **kwargs) -> str:
 
     try:
         resultado = query_tenant(
-            "SELECT descripcion, COUNT(*) as veces_vendido, SUM(total) as total_generado "
-            "FROM ventas_venta "
-            "WHERE DATE(fecha_venta) BETWEEN %s AND %s "
-            "GROUP BY descripcion "
+            "SELECT vi.description, SUM(vi.quantity) as veces_vendido, "
+            "SUM(vi.subtotal) as total_generado "
+            "FROM ventas_ventaitem vi "
+            "JOIN ventas_venta v ON v.id = vi.venta_id "
+            "WHERE DATE(v.fecha_venta) BETWEEN %s AND %s "
+            "GROUP BY vi.description "
             "ORDER BY total_generado DESC "
             "LIMIT 5",
             [fecha_inicio, fecha_fin]
@@ -174,13 +184,13 @@ def handle_producto_mas_vendido(params: dict, **kwargs) -> str:
             medallas = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
             for i, r in enumerate(resultado):
                 lineas.append(
-                    f"{medallas[i]} {r['descripcion']} — "
+                    f"{medallas[i]} {r['description']} — "
                     f"**{formatear_monto(r['total_generado'])}** "
-                    f"({r['veces_vendido']} ventas)"
+                    f"({r['veces_vendido']} unidades)"
                 )
             return '\n'.join(lineas)
         else:
-            return f"No se encontraron ventas {periodo_texto}."
+            return f"No se encontraron ítems de venta {periodo_texto}."
     except Exception as e:
         return _error_bd(str(e))
 
@@ -203,10 +213,11 @@ def handle_buscar_producto(params: dict, **kwargs) -> str:
 
     try:
         resultado = query_tenant(
-            "SELECT COUNT(*) as transacciones, SUM(total) as total_ventas "
-            "FROM ventas_venta "
-            "WHERE LOWER(descripcion) LIKE LOWER(%s) "
-            "AND DATE(fecha_venta) BETWEEN %s AND %s",
+            "SELECT COUNT(DISTINCT v.id) as transacciones, SUM(vi.subtotal) as total_ventas "
+            "FROM ventas_ventaitem vi "
+            "JOIN ventas_venta v ON v.id = vi.venta_id "
+            "WHERE LOWER(vi.description) LIKE LOWER(%s) "
+            "AND DATE(v.fecha_venta) BETWEEN %s AND %s",
             [f'%{producto}%', fecha_inicio, fecha_fin]
         )
         if resultado and resultado[0]['total_ventas']:
@@ -309,14 +320,247 @@ def handle_tendencia(**kwargs) -> str:
         return _error_bd(str(e))
 
 
-def handle_prediccion(**kwargs) -> str:
-    # Mock hasta que el modelo esté listo
-    return (
-        "🔮 **Predicción de ventas:**\n"
-        "El módulo predictivo está en desarrollo. Pronto podrás consultar "
-        "proyecciones de ventas para los próximos días y semanas.\n\n"
-        "_Mientras tanto puedes consultar tendencias históricas._"
-    )
+def handle_prediccion(params: dict = None, **kwargs) -> str:
+    """
+    Proyecta ventas usando el modelo ML CatBoost v22.
+    Extrae el horizonte del mensaje: día, semana (default) o mes.
+    """
+    texto = kwargs.get('texto', '')
+    from .router import normalizar
+    texto_n = normalizar(texto)
+
+    if any(p in texto_n for p in ['dia', 'manana', 'mañana']):
+        horizon = 1
+        label = 'mañana'
+    elif any(p in texto_n for p in ['mes', 'mensual', 'proximo mes']):
+        horizon = 30
+        label = 'el próximo mes'
+    else:
+        horizon = 7
+        label = 'la próxima semana'
+
+    try:
+        from django.db import connection as _conn
+        tenant_slug = _conn.schema_name
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=tenant_slug, horizon=horizon)
+
+        total = sum(p['prediccion'] for p in predicciones)
+        lineas = [f"🔮 **Proyección ML para {label}:**\n"]
+        for p in predicciones:
+            lineas.append(f"• {p['fecha']}: **{formatear_monto(p['prediccion'])}**")
+        if horizon > 1:
+            lineas.append(f"\n📊 **Total estimado: {formatear_monto(total)}**")
+        lineas.append("\n_Modelo CatBoost v22 entrenado con datos históricos de TechHive._")
+        return '\n'.join(lineas)
+
+    except ValueError as exc:
+        return (
+            "🔮 **Proyección de ventas:**\n"
+            f"No es posible generar una predicción: {exc}\n"
+            "_Se necesitan al menos 28 días de ventas registradas._"
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_caja(params: dict = None, **kwargs) -> str:
+    """
+    Consulta el balance de caja (ingresos, egresos, neto) para el período indicado.
+    Por defecto muestra el balance del día actual.
+    """
+    params = params or {}
+    fecha_inicio = params.get('fecha_inicio')
+    fecha_fin = params.get('fecha_fin')
+
+    hoy = date.today().strftime('%Y-%m-%d')
+    if not fecha_inicio:
+        fecha_inicio = fecha_fin = hoy
+        periodo_texto = 'hoy'
+    else:
+        periodo_texto = formatear_periodo(fecha_inicio, fecha_fin)
+
+    try:
+        movimientos = query_tenant(
+            "SELECT type, SUM(amount) as total FROM cash_movement "
+            "WHERE date BETWEEN %s AND %s GROUP BY type",
+            [fecha_inicio, fecha_fin]
+        )
+        ingresos = 0.0
+        egresos = 0.0
+        for r in movimientos:
+            if r['type'] == 'income':
+                ingresos = float(r['total'])
+            elif r['type'] == 'expense':
+                egresos = float(r['total'])
+
+        # Monto inicial de la sesión si el período es un solo día
+        monto_inicial = 0.0
+        if fecha_inicio == fecha_fin:
+            sesion = query_tenant(
+                "SELECT opening_amount FROM cash_session WHERE date = %s",
+                [fecha_inicio]
+            )
+            if sesion:
+                monto_inicial = float(sesion[0]['opening_amount'])
+
+        balance = monto_inicial + ingresos - egresos
+        emoji = '✅' if balance >= 0 else '⚠️'
+
+        lineas = [f"💰 **Balance de caja ({periodo_texto}):**\n"]
+        if monto_inicial:
+            lineas.append(f"• Apertura: **{formatear_monto(monto_inicial)}**")
+        lineas += [
+            f"• Ingresos: **{formatear_monto(ingresos)}**",
+            f"• Egresos: **{formatear_monto(egresos)}**",
+            f"• {emoji} Caja final: **{formatear_monto(balance)}**",
+        ]
+        return '\n'.join(lineas)
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_inventario_stock(params: dict = None, **kwargs) -> str:
+    """
+    Muestra productos con stock bajo (stock <= stock_min) del inventario.
+    """
+    try:
+        resultado = query_tenant(
+            "SELECT p.name, p.stock, p.stock_min, "
+            "COALESCE(c.name, 'Sin categoría') AS categoria "
+            "FROM inventory_product p "
+            "LEFT JOIN inventory_category c ON c.id = p.category_id "
+            "WHERE p.is_active = TRUE AND p.stock <= p.stock_min "
+            "ORDER BY p.stock ASC LIMIT 10",
+            []
+        )
+        total_bajo = query_tenant(
+            "SELECT COUNT(*) as total FROM inventory_product "
+            "WHERE is_active = TRUE AND stock <= stock_min",
+            []
+        )
+        n_total = total_bajo[0]['total'] if total_bajo else 0
+
+        if not resultado:
+            return "✅ **Stock al día:** todos los productos tienen stock suficiente."
+
+        lineas = [f"⚠️ **Productos con stock bajo ({n_total} en total):**\n"]
+        for r in resultado:
+            lineas.append(
+                f"• **{r['name']}** [{r['categoria']}] — "
+                f"Stock: {r['stock']} / Mínimo: {r['stock_min']}"
+            )
+        if n_total > 10:
+            lineas.append(f"\n_Mostrando los 10 más críticos de {n_total}._")
+        return '\n'.join(lineas)
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_recomendar_compra(params: dict = None, **kwargs) -> str:
+    """
+    Sugiere qué productos pedir al proveedor basándose en stock bajo
+    y proyección de demanda del predictor ML.
+    """
+    try:
+        productos_bajo = query_tenant(
+            "SELECT p.name, p.stock, p.stock_min, "
+            "GREATEST(p.stock_min * 3 - p.stock, p.stock_min) AS cantidad_sugerida, "
+            "COALESCE(c.name, 'Sin categoría') AS categoria "
+            "FROM inventory_product p "
+            "LEFT JOIN inventory_category c ON c.id = p.category_id "
+            "WHERE p.is_active = TRUE AND p.stock <= p.stock_min * 2 "
+            "ORDER BY (p.stock_min - p.stock) DESC LIMIT 10",
+            []
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+    # Intentar obtener proyección ML para enriquecer la respuesta
+    proyeccion_texto = ""
+    try:
+        from django.db import connection as _conn
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=_conn.schema_name, horizon=7)
+        total_semana = sum(p['prediccion'] for p in predicciones)
+        proyeccion_texto = f"\n\n📈 _Proyección ML próxima semana: **{formatear_monto(total_semana)}** — ten stock suficiente._"
+    except Exception:
+        pass
+
+    if not productos_bajo:
+        return (
+            "✅ **Stock suficiente:** todos los productos tienen inventario adecuado "
+            "para las próximas semanas." + proyeccion_texto
+        )
+
+    lineas = [f"🛒 **Recomendación de compra ({len(productos_bajo)} productos):**\n"]
+    for r in productos_bajo:
+        sugerido = int(r['cantidad_sugerida'])
+        lineas.append(
+            f"• **{r['name']}** [{r['categoria']}] — "
+            f"Stock actual: {r['stock']} / Mínimo: {r['stock_min']} → "
+            f"Pedir: **{sugerido} unidades**"
+        )
+    lineas.append(proyeccion_texto)
+    return '\n'.join(lineas)
+
+
+def handle_alerta_demanda(params: dict = None, **kwargs) -> str:
+    """
+    Detecta anomalías comparando ventas reales de las últimas 2 semanas
+    contra la proyección del modelo ML.
+    """
+    hoy = date.today()
+    hace_7 = (hoy - timedelta(days=6)).strftime('%Y-%m-%d')
+    hace_14 = (hoy - timedelta(days=13)).strftime('%Y-%m-%d')
+    hace_8 = (hoy - timedelta(days=7)).strftime('%Y-%m-%d')
+    hoy_str = hoy.strftime('%Y-%m-%d')
+
+    try:
+        sem_actual = query_tenant(
+            "SELECT SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [hace_7, hoy_str]
+        )
+        sem_anterior = query_tenant(
+            "SELECT SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [hace_14, hace_8]
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+    real_actual = float(sem_actual[0]['total'] or 0) if sem_actual else 0.0
+    real_anterior = float(sem_anterior[0]['total'] or 0) if sem_anterior else 0.0
+
+    # Proyección ML de la semana actual
+    proyectado = None
+    try:
+        from django.db import connection as _conn
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=_conn.schema_name, horizon=7)
+        proyectado = sum(p['prediccion'] for p in predicciones)
+    except Exception:
+        pass
+
+    lineas = ["🔍 **Análisis de demanda — últimas 2 semanas:**\n"]
+    lineas.append(f"• Semana anterior (hace 14→8 días): **{formatear_monto(real_anterior)}**")
+    lineas.append(f"• Semana actual (últimos 7 días):   **{formatear_monto(real_actual)}**")
+
+    # Variación semana a semana
+    if real_anterior > 0:
+        variacion = ((real_actual - real_anterior) / real_anterior) * 100
+        emoji = "📈" if variacion >= 0 else "📉"
+        lineas.append(f"\n{emoji} Variación semanal: **{variacion:+.1f}%**")
+        if abs(variacion) >= 20:
+            direction = "caída" if variacion < 0 else "pico"
+            lineas.append(f"⚠️ **Alerta: {direction} inusual de {abs(variacion):.0f}% respecto a la semana anterior.**")
+
+    # Mostrar proyección ML como referencia (no comparar con histórico: son períodos distintos)
+    if proyectado:
+        lineas.append(f"\n🔮 **Proyección ML próxima semana: {formatear_monto(proyectado)}**")
+
+    return '\n'.join(lineas)
 
 
 def handle_desconocido(texto: str, **kwargs) -> str:
@@ -352,6 +596,10 @@ HANDLERS = {
     'comparar_periodos': handle_comparar_periodos,
     'tendencia': handle_tendencia,
     'prediccion': handle_prediccion,
+    'caja_balance': handle_caja,
+    'inventario_stock': handle_inventario_stock,
+    'recomendar_compra': handle_recomendar_compra,
+    'alerta_demanda': handle_alerta_demanda,
     'desconocido': handle_desconocido,
 }
 

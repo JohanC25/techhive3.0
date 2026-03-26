@@ -6,11 +6,11 @@
         <h2 class="view-title">Inventario</h2>
         <p class="view-sub">Gestión de productos y categorías</p>
       </div>
-      <button class="btn-primary" @click="openCreate">
+      <button class="btn-primary" @click="activeTab === 'shelves' ? openCreateShelf() : openCreate()">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
         </svg>
-        {{ activeTab === 'products' ? 'Nuevo producto' : 'Nueva categoría' }}
+        {{ activeTab === 'products' ? 'Nuevo producto' : activeTab === 'categories' ? 'Nueva categoría' : 'Nueva percha' }}
       </button>
     </div>
 
@@ -21,6 +21,9 @@
       </button>
       <button class="tab-btn" :class="{ active: activeTab === 'categories' }" @click="activeTab = 'categories'; loadCategories()">
         Categorías
+      </button>
+      <button class="tab-btn" :class="{ active: activeTab === 'shelves' }" @click="activeTab = 'shelves'; loadShelves()">
+        Perchas
       </button>
     </div>
 
@@ -151,6 +154,50 @@
       </div>
     </template>
 
+    <!-- Shelves tab -->
+    <template v-if="activeTab === 'shelves'">
+      <div class="table-card">
+        <div class="table-card-header" style="display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid #f1f5f9;">
+          <span style="font-weight:600;font-size:15px">Perchas</span>
+          <button class="btn-primary" @click="openCreateShelf">Nueva percha</button>
+        </div>
+        <table v-if="shelves.length" class="data-table">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Ubicación</th>
+              <th class="text-center">Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="s in shelves" :key="s.id">
+              <td style="font-weight:600">{{ s.name }}</td>
+              <td>{{ s.location || '—' }}</td>
+              <td class="text-center">
+                <div class="row-actions">
+                  <button class="btn-icon btn-edit" @click="openEditShelf(s)">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                    </svg>
+                  </button>
+                  <button class="btn-icon btn-delete" @click="deleteShelf(s)">
+                    <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-else class="empty-state">
+          <div class="empty-icon">🗄️</div>
+          <p>No hay perchas registradas.</p>
+          <button class="btn-primary" @click="openCreateShelf">Agregar primera percha</button>
+        </div>
+      </div>
+    </template>
+
     <!-- Modal Producto -->
     <Teleport to="body">
       <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
@@ -195,6 +242,13 @@
               </select>
             </div>
             <div class="form-group">
+              <label class="form-label">Percha</label>
+              <select v-model="prodForm.shelf" class="form-input">
+                <option :value="null">Sin percha</option>
+                <option v-for="s in shelves" :key="s.id" :value="s.id">{{ s.name }}</option>
+              </select>
+            </div>
+            <div class="form-group">
               <label class="form-label">Descripción</label>
               <textarea v-model="prodForm.description" class="form-input form-textarea"></textarea>
             </div>
@@ -230,6 +284,30 @@
         </div>
       </div>
 
+      <!-- Shelf modal -->
+      <div v-if="showShelfModal" class="modal-overlay" @click.self="showShelfModal = false">
+        <div class="modal">
+          <div class="modal-header">
+            <h3 class="modal-title">{{ editShelfTarget ? 'Editar percha' : 'Nueva percha' }}</h3>
+            <button class="modal-close" @click="showShelfModal = false">✕</button>
+          </div>
+          <form @submit.prevent="saveShelf" class="modal-form">
+            <div class="form-group">
+              <label class="form-label">Nombre *</label>
+              <input v-model="shelfForm.name" type="text" class="form-input" required />
+            </div>
+            <div class="form-group">
+              <label class="form-label">Ubicación</label>
+              <input v-model="shelfForm.location" type="text" class="form-input" placeholder="Ej: Pasillo 3, Estante B" />
+            </div>
+            <div class="modal-footer">
+              <button type="button" class="btn-secondary" @click="showShelfModal = false">Cancelar</button>
+              <button type="submit" class="btn-primary" :disabled="savingShelf"><span v-if="savingShelf" class="spinner-sm"></span>Guardar</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
       <!-- Confirm delete -->
       <div v-if="showConfirm" class="modal-overlay" @click.self="showConfirm = false">
         <div class="modal modal-sm">
@@ -254,14 +332,15 @@ import api from '@/services/api'
 import { useToastStore } from '@/stores/toast'
 
 const toast = useToastStore()
-const activeTab = ref<'products' | 'categories'>('products')
+const activeTab = ref<'products' | 'categories' | 'shelves'>('products')
 
 interface Product {
   id: number; name: string; sku: string; category: number | null; category_name: string
   description: string; price: number; cost: number | null; stock: number; stock_min: number
-  is_active: boolean; low_stock: boolean
+  is_active: boolean; low_stock: boolean; shelf: number | null; shelf_name: string
 }
 interface Category { id: number; name: string; description: string }
+interface Shelf { id: number; name: string; location: string }
 
 const items = ref<Product[]>([])
 const categories = ref<Category[]>([])
@@ -269,11 +348,17 @@ const count = ref(0); const nextUrl = ref<string | null>(null); const prevUrl = 
 const currentPage = ref(1); const totalProducts = ref(0)
 const tableLoading = ref(false); const catLoading = ref(false); const saving = ref(false)
 const search = ref(''); const filters = ref({ category: '', is_active: '' })
+const shelves = ref<Shelf[]>([])
+const showShelfModal = ref(false)
+const editShelfTarget = ref<Shelf | null>(null)
+const shelfForm = ref({ name: '', location: '' })
+const savingShelf = ref(false)
+
 const showModal = ref(false); const showConfirm = ref(false)
 const editingItem = ref<Product | Category | null>(null)
 const deletingItem = ref<any>(null); const formError = ref('')
 
-const emptyProd = () => ({ name: '', sku: '', category: null as number | null, description: '', price: 0, cost: null as number | null, stock: 0, stock_min: 0, is_active: true })
+const emptyProd = () => ({ name: '', sku: '', category: null as number | null, shelf: null as number | null, description: '', price: 0, cost: null as number | null, stock: 0, stock_min: 0, is_active: true })
 const emptyCat = () => ({ name: '', description: '' })
 const prodForm = ref(emptyProd())
 const catForm = ref(emptyCat())
@@ -353,7 +438,47 @@ async function deleteItem() {
   } catch { toast.error('Error al eliminar') } finally { saving.value = false }
 }
 
-onMounted(async () => { await loadCategories(); loadData() })
+async function loadShelves() {
+  const { data } = await api.get('/inventory/shelves/')
+  shelves.value = Array.isArray(data) ? data : (data.results ?? [])
+}
+
+function openCreateShelf() {
+  editShelfTarget.value = null
+  shelfForm.value = { name: '', location: '' }
+  showShelfModal.value = true
+}
+
+function openEditShelf(s: Shelf) {
+  editShelfTarget.value = s
+  shelfForm.value = { name: s.name, location: s.location }
+  showShelfModal.value = true
+}
+
+async function saveShelf() {
+  savingShelf.value = true
+  try {
+    if (editShelfTarget.value) {
+      const { data } = await api.put(`/inventory/shelves/${editShelfTarget.value.id}/`, shelfForm.value)
+      const idx = shelves.value.findIndex(s => s.id === editShelfTarget.value!.id)
+      if (idx > -1) shelves.value[idx] = data
+    } else {
+      const { data } = await api.post('/inventory/shelves/', shelfForm.value)
+      shelves.value.push(data)
+    }
+    showShelfModal.value = false
+  } finally {
+    savingShelf.value = false
+  }
+}
+
+async function deleteShelf(s: Shelf) {
+  if (!confirm(`¿Eliminar la percha "${s.name}"?`)) return
+  await api.delete(`/inventory/shelves/${s.id}/`)
+  shelves.value = shelves.value.filter(x => x.id !== s.id)
+}
+
+onMounted(async () => { await loadCategories(); loadShelves(); loadData() })
 </script>
 
 <style scoped>

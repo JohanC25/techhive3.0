@@ -74,11 +74,19 @@ def enviar_mensaje(request):
 
     intent = resultado_router['intent']
 
-    # Fallback LLM: cuando el regex no detectó intención, Claude intenta ayudar
+    # Fallback LLM: cuando el regex no detectó intención, aplicar scope guard primero
     if intent == 'desconocido':
-        from .llm_fallback import fallback_staff, fallback_cliente
-        if es_cliente:
-            # Pasar categorías como contexto para que Claude pueda guiar mejor
+        from .llm_fallback import (
+            fallback_staff, fallback_cliente,
+            is_in_domain, out_of_domain_response,
+        )
+        canal = 'cliente' if es_cliente else 'staff'
+
+        if not is_in_domain(mensaje, canal):
+            # Fuera del dominio → respuesta estática sin llamar a Haiku
+            respuesta = out_of_domain_response(canal)
+        elif es_cliente:
+            # Dentro del dominio cliente → fallback con contexto de categorías
             try:
                 from django.db import connection as conn
                 with conn.cursor() as cur:
@@ -91,11 +99,13 @@ def enviar_mensaje(request):
             except Exception:
                 categorias = []
             llm_resp = fallback_cliente(mensaje, categorias=categorias)
+            if llm_resp:
+                respuesta = llm_resp
         else:
+            # Dentro del dominio staff → fallback con system prompt acotado
             llm_resp = fallback_staff(mensaje)
-
-        if llm_resp:
-            respuesta = llm_resp
+            if llm_resp:
+                respuesta = llm_resp
 
     # Guardar respuesta del bot
     ChatMessage.objects.create(

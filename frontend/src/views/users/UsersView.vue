@@ -103,12 +103,20 @@
 
             <div class="form-row">
               <div class="form-group">
-                <label class="form-label">Usuario *</label>
-                <input v-model="form.username" class="form-input" placeholder="jperez" :disabled="!!editTarget" required />
+                <label class="form-label">Cédula / RUC *</label>
+                <input v-model="form.cedula" class="form-input" placeholder="1234567890" maxlength="13" required />
               </div>
               <div class="form-group">
-                <label class="form-label">Teléfono</label>
-                <input v-model="form.phone" class="form-input" placeholder="0999999999" />
+                <label class="form-label">Teléfono {{ form.role === 'client' ? '*' : '' }}</label>
+                <input v-model="form.phone" class="form-input" placeholder="0999999999" :required="form.role === 'client'" />
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Usuario *</label>
+                <input v-model="form.username" class="form-input" placeholder="Auto-generado" :disabled="!!editTarget" required />
+                <span v-if="!editTarget" style="font-size:11px;color:#94a3b8;margin-top:2px;">Se genera automáticamente con nombre + cédula</span>
               </div>
             </div>
 
@@ -199,7 +207,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/services/api'
 
@@ -211,6 +219,7 @@ interface UserItem {
   email: string
   role: string
   phone: string
+  cedula: string
   is_active: boolean
 }
 
@@ -228,8 +237,22 @@ const saving = ref(false)
 const formError = ref('')
 const form = ref({
   username: '', first_name: '', last_name: '',
-  email: '', role: 'employee', phone: '',
+  email: '', role: 'employee', phone: '', cedula: '',
   password: '', password2: '', is_active: true,
+})
+
+// Auto-generar username al escribir nombre, apellido o cédula (solo en creación)
+function normalizarTexto(t: string) {
+  return t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase()
+}
+watch([() => form.value.first_name, () => form.value.last_name, () => form.value.cedula], () => {
+  if (editTarget.value) return
+  const inicial = normalizarTexto(form.value.first_name.trim()).charAt(0)
+  const apellido = normalizarTexto(form.value.last_name.trim().split(' ')[0])
+  const sufijo = form.value.cedula.trim().slice(-3)
+  if (inicial && apellido && sufijo) {
+    form.value.username = `${inicial}${apellido}${sufijo}`
+  }
 })
 
 const deleteTarget = ref<UserItem | null>(null)
@@ -264,14 +287,14 @@ onMounted(loadData)
 
 function openCreate() {
   editTarget.value = null
-  form.value = { username: '', first_name: '', last_name: '', email: '', role: 'employee', phone: '', password: '', password2: '', is_active: true }
+  form.value = { username: '', first_name: '', last_name: '', email: '', role: 'employee', phone: '', cedula: '', password: '', password2: '', is_active: true }
   formError.value = ''
   showModal.value = true
 }
 
 function openEdit(u: UserItem) {
   editTarget.value = u
-  form.value = { username: u.username, first_name: u.first_name, last_name: u.last_name, email: u.email, role: u.role, phone: u.phone, password: '', password2: '', is_active: u.is_active }
+  form.value = { username: u.username, first_name: u.first_name, last_name: u.last_name, email: u.email, role: u.role, phone: u.phone, cedula: u.cedula, password: '', password2: '', is_active: u.is_active }
   formError.value = ''
   showModal.value = true
 }
