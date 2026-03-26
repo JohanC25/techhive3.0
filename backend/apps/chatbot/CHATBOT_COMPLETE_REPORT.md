@@ -1,7 +1,7 @@
 # Reporte Completo de Pruebas — Chatbot TechHive 3.0
-**Fecha:** 2026-03-17
-**Versión:** TechHive 3.0 — Chatbot v1.1
-**Cobertura:** Staff interno (12 intents) + Cliente externo (7 intents)
+**Fecha:** 2026-03-23 (actualizado — v1.2 staff)
+**Versión:** TechHive 3.0 — Chatbot v1.2
+**Cobertura:** Staff interno (14 intents) + Cliente externo (7 intents)
 **Evaluador:** `evaluar_chatbot.py` — ejecución sobre router regex (sin BD, sin LLM)
 
 ---
@@ -10,21 +10,22 @@
 
 | Métrica | Staff | Cliente | Total |
 |---------|-------|---------|-------|
-| Total casos ejecutados | 51 | 60 | 111 |
-| Casos PASS | 51 | 60 | 111 |
+| Total casos ejecutados | 63 | 60 | 123 |
+| Casos PASS | 63 | 60 | 123 |
 | Casos FAIL | 0 | 0 | 0 |
 | Precisión global | 100.0% | 100.0% | 100.0% |
 | Macro F1-Score | 100.0% | 100.0% | 100.0% |
-| Intents cubiertos (router) | 10/12* | 7/7 | — |
+| Intents cubiertos (router) | 12/14* | 7/7 | — |
 
 > *`caja_balance` e `inventario_stock` están implementados en `handlers.py` pero
-> no fueron incluidos en `CASOS_DE_PRUEBA`. Los 10 intents evaluados obtuvieron 100%.
+> no fueron incluidos en `CASOS_DE_PRUEBA`. Los 12 intents evaluados obtuvieron 100%.
+> Los 2 nuevos intents `recomendar_compra` y `alerta_demanda` fueron añadidos en v1.2.
 
 ---
 
 ## 2. Resultados chatbot staff
 
-### Métricas por intent (51 casos)
+### Métricas por intent (63 casos — v1.2)
 
 | Intent | TP | FP | FN | Precisión | Recall | F1 |
 |--------|----|----|-----|-----------|--------|----|
@@ -38,11 +39,13 @@
 | comparar_periodos | 6 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | tendencia | 4 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | prediccion | 4 | 0 | 0 | 100.0% | 100.0% | 100.0% |
+| recomendar_compra | 6 | 0 | 0 | 100.0% | 100.0% | 100.0% |
+| alerta_demanda | 6 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | **caja_balance** | — | — | — | — | — | — |
 | **inventario_stock** | — | — | — | — | — | — |
-| **TOTAL** | **51** | **0** | **0** | **100.0%** | **100.0%** | **100.0%** |
+| **TOTAL** | **63** | **0** | **0** | **100.0%** | **100.0%** | **100.0%** |
 
-### Intents del staff completo (12)
+### Intents del staff completo (14 — v1.2)
 
 | # | Intent | Handler | Fuente de datos |
 |---|--------|---------|-----------------|
@@ -58,6 +61,8 @@
 | 10 | `prediccion` | `handle_prediccion` | `get_predictor().forecast()` ML V22 |
 | 11 | `caja_balance` | `handle_caja` | `cash_movement + cash_session` |
 | 12 | `inventario_stock` | `handle_inventario_stock` | `inventory_product` |
+| 13 | `recomendar_compra` | `handle_recomendar_compra` | `inventory_product` + `get_predictor().forecast()` |
+| 14 | `alerta_demanda` | `handle_alerta_demanda` | `ventas_venta` + `get_predictor().forecast()` |
 
 ---
 
@@ -182,13 +187,16 @@ else:
 TechHive 3.0 implementa dos canales conversacionales diferenciados según el perfil
 del usuario autenticado, gestionados desde un único endpoint `/api/chatbot/mensaje/`.
 
-**Canal Staff Interno:** cubre 12 intents operativos que incluyen consultas de ventas
+**Canal Staff Interno:** cubre 14 intents operativos que incluyen consultas de ventas
 históricas por período (hoy, ayer, semana, mes), predicciones del motor V22 (CatBoost
 ensemble de 3 modelos), análisis comparativos entre períodos, tendencias semanales,
 balance de caja con apertura de sesión, alertas de inventario bajo stock, búsqueda
-de productos por ventas, y rankings de productos más vendidos. El intent `prediccion`
-integra directamente la salida de `get_predictor().forecast()` del modelo ML, retornando
-proyecciones día a día con horizonte configurable (1, 7 o 30 días).
+de productos por ventas, rankings de productos más vendidos, recomendaciones de compra
+a proveedores y detección de anomalías en la demanda. El intent `prediccion` integra
+directamente la salida de `get_predictor().forecast()` del modelo ML, retornando
+proyecciones día a día con horizonte configurable (1, 7 o 30 días). Los intents
+`recomendar_compra` y `alerta_demanda` también invocan el motor ML para enriquecer
+sus respuestas con contexto de demanda proyectada.
 
 **Canal Cliente Externo:** cubre 7 intents de consulta pública sobre el catálogo del
 tenant activo: precio, disponibilidad, búsqueda, categorías, horarios y contacto. Por
@@ -211,7 +219,7 @@ bloquea consultas fuera del ámbito de negocio antes de llamar al LLM.
 
 **Resultados de validación formal:**
 
-La suite de 111 casos de prueba (51 staff + 60 cliente) ejecutada sobre
+La suite de 123 casos de prueba (63 staff + 60 cliente) ejecutada sobre
 `evaluar_chatbot.py` verificó:
 
 - Precisión de clasificación de intents: **100.0%** (staff), **100.0%** (cliente)
@@ -222,14 +230,15 @@ La suite de 111 casos de prueba (51 staff + 60 cliente) ejecutada sobre
 
 | Canal | Intents | Casos | Precisión | Macro F1 |
 |-------|---------|-------|-----------|----------|
-| Staff interno | 12 | 51 | 100.0% | 100.0% |
+| Staff interno | 14 | 63 | 100.0% | 100.0% |
 | Cliente externo | 7 | 60 | 100.0% | 100.0% |
-| **Total** | **19** | **111** | **100.0%** | **100.0%** |
+| **Total** | **21** | **123** | **100.0%** | **100.0%** |
 
 ---
 
 ## 10. Archivos modificados en esta versión
 
+### v1.1 (2026-03-17)
 | Archivo | Cambio |
 |---------|--------|
 | `client_router.py` | +intent `horarios_contacto` (7 patrones regex), +en `PRIORITY_ORDER` |
@@ -237,3 +246,12 @@ La suite de 111 casos de prueba (51 staff + 60 cliente) ejecutada sobre
 | `llm_fallback.py` | `fallback_cliente()` system prompt reforzado con lista explícita NUNCA |
 | `evaluar_chatbot.py` | +24 nuevos casos en `CASOS_CLIENTE` (Grupos K, L, M, horarios) → 36→60 |
 | `CHATBOT_COMPLETE_REPORT.md` | NUEVO — este archivo |
+
+### v1.2 (2026-03-23) — +recomendar_compra, +alerta_demanda
+| Archivo | Cambio |
+|---------|--------|
+| `router.py` | +intent `recomendar_compra` (6 patrones), +intent `alerta_demanda` (7 patrones), pre-check de alta prioridad en `detectar_intencion()` |
+| `handlers.py` | +`handle_recomendar_compra()` (SQL inventory + ML forecast), +`handle_alerta_demanda()` (SQL ventas 2 semanas + ML forecast), actualizado saludo/ayuda |
+| `evaluar_chatbot.py` | +12 nuevos casos en `CASOS_DE_PRUEBA` (6 recomendar_compra + 6 alerta_demanda) → 51→63 |
+| `CHATBOT_COMPLETE_REPORT.md` | Actualizado — este archivo |
+| `CONSISTENCY_REPORT.md` | C4 mejorado de 🔴 a 🟡, contador actualizado |

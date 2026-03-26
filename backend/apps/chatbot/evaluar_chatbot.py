@@ -55,6 +55,7 @@ CASOS_DE_PRUEBA = [
     ("top productos",                               "producto_mas_vendido"),
     ("articulo mas vendido",                        "producto_mas_vendido"),
     ("que vendemos mas",                            "producto_mas_vendido"),
+    ("producto mas vendido hoy",                    "producto_mas_vendido"),
     # BUSCAR PRODUCTO
     ("cuanto vendimos de impresiones",              "buscar_producto"),
     ("ventas de recargas",                          "buscar_producto"),
@@ -77,6 +78,23 @@ CASOS_DE_PRUEBA = [
     ("prediccion de ventas",                        "prediccion"),
     ("proyeccion para el proximo mes",              "prediccion"),
     ("cuanto venderemos en febrero",                "prediccion"),
+    ("cuanto vendere manana",                       "prediccion"),
+    ("cuanto vendere manana aproximadamente",       "prediccion"),
+    ("ventas de manana",                            "prediccion"),
+    # RECOMENDAR COMPRA
+    ("que debo pedir al proveedor",                 "recomendar_compra"),
+    ("que productos debo reponer",                  "recomendar_compra"),
+    ("recomiendame que comprar",                    "recomendar_compra"),
+    ("que debo ordenar al proveedor",               "recomendar_compra"),
+    ("reabastecer productos",                       "recomendar_compra"),
+    ("cuanto pedir de cables",                      "recomendar_compra"),
+    # ALERTA DEMANDA
+    ("hay alguna anomalia en las ventas",           "alerta_demanda"),
+    ("las ventas estan por debajo de lo esperado",  "alerta_demanda"),
+    ("hubo alguna caida de ventas",                 "alerta_demanda"),
+    ("algo inusual en las ventas",                  "alerta_demanda"),
+    ("ventas inusuales esta semana",                "alerta_demanda"),
+    ("prediccion vs ventas reales",                 "alerta_demanda"),
 ]
 
 # ─────────────────────────────────────────────

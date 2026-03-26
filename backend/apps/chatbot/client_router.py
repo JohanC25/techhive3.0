@@ -41,9 +41,9 @@ CLIENT_INTENT_PATTERNS = {
     ],
     # Precio ANTES que disponibilidad y buscar_catalogo (más específico)
     'consultar_precio': [
-        r'\b(cuanto cuesta|cuanto vale|cuanto sale|cual es el precio|precio de|precio del|cuanto es)\b',
+        r'\b(cuanto cuesta|cuanto cuestan|cuanto vale|cuanto valen|cuanto sale|cuanto salen|cual es el precio|precio de|precio del|cuanto es)\b',
         r'\bprecio\b.{0,20}\bde\b',
-        r'\bcuanto.{0,10}(cuesta|vale|sale)\b',
+        r'\bcuanto.{0,10}(cuesta|cuestan|vale|valen|sale)\b',
     ],
     'verificar_disponibilidad': [
         r'\b(hay|tienen|tienes|existe|lo tienen|lo tienes|cuentan con)\b.{1,40}',
@@ -77,8 +77,9 @@ def extraer_nombre_producto_cliente(texto: str) -> str | None:
     """Extrae el nombre del producto de una consulta de cliente."""
     texto_n = normalizar(texto)
     patrones = [
-        r'cuanto cuesta (?:el |la |los |las |un |una )?(.+)',
-        r'cuanto vale (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto cuesta(?:n)? (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto vale(?:n)? (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto sale(?:n)? (?:el |la |los |las |un |una )?(.+)',
         r'precio de(?:l)? (?:el |la |los |las |un |una )?(.+)',
         r'hay (?:el |la |los |las |un |una )?(.+)',
         r'tienen (?:el |la |los |las |un |una )?(.+)',
@@ -106,6 +107,8 @@ def extraer_nombre_producto_cliente(texto: str) -> str | None:
                 '', nombre
             ).strip()
             nombre = re.sub(r'\s+', ' ', nombre).strip()
+            nombre = re.sub(r'[?!.,;:"\']+$', '', nombre).strip()       # puntuación final
+            nombre = re.sub(r'^(dentro de|en la|en el|de la|del|de los|de las|en)\s+', '', nombre).strip()  # prefijos basura
             if len(nombre) > 2:
                 return nombre
     return None

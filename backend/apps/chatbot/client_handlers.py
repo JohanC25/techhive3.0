@@ -11,8 +11,17 @@ from django.db import connection
 # HELPERS DE CONSULTA
 # ─────────────────────────────────────────────
 
+def _normalizar(texto: str) -> str:
+    """Elimina tildes y convierte a minúsculas para comparaciones."""
+    import unicodedata
+    texto = texto.lower()
+    return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
+
+
 def query_catalogo(search: str = '', only_available: bool = False) -> list:
-    """Consulta productos del catálogo del tenant activo."""
+    """Consulta productos del catálogo del tenant activo.
+    El filtrado por texto se hace en Python (tolerante a tildes y plurales).
+    """
     try:
         sql = """
             SELECT
@@ -26,17 +35,35 @@ def query_catalogo(search: str = '', only_available: bool = False) -> list:
             WHERE p.is_active = TRUE
         """
         params = []
-        if search:
-            sql += " AND (LOWER(p.name) LIKE LOWER(%s) OR LOWER(p.description) LIKE LOWER(%s))"
-            params.extend([f'%{search}%', f'%{search}%'])
         if only_available:
             sql += " AND p.stock > 0"
-        sql += " ORDER BY p.name LIMIT 10"
+        sql += " ORDER BY p.name LIMIT 200"
 
         with connection.cursor() as cursor:
             cursor.execute(sql, params)
             cols = [c[0] for c in cursor.description]
-            return [dict(zip(cols, row)) for row in cursor.fetchall()]
+            rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+        if search:
+            search_n = _normalizar(search)
+            # Palabras de búsqueda, quitando plural simple (cables→cable, audifonos→audifono)
+            words = []
+            for w in search_n.split():
+                if len(w) > 3 and w.endswith('s'):
+                    words.append(w[:-1])  # sin la 's' final
+                else:
+                    words.append(w)
+            words = [w for w in words if len(w) > 1]
+
+            def matches(p):
+                haystack = _normalizar(
+                    f"{p['name']} {p.get('description') or ''} {p.get('category') or ''}"
+                )
+                return all(w in haystack for w in words)
+
+            rows = [p for p in rows if matches(p)]
+
+        return rows[:10]
     except Exception:
         return []
 

@@ -49,7 +49,9 @@ def handle_saludo(**kwargs) -> str:
         "• 📊 **Ventas del día, semana o mes**\n"
         "• 🏆 **Productos más vendidos**\n"
         "• 📈 **Tendencias y comparaciones**\n"
-        "• 🔮 **Predicciones de ventas ML**\n\n"
+        "• 🔮 **Predicciones de ventas ML**\n"
+        "• 🛒 **Recomendación de compra a proveedores**\n"
+        "• ⚠️ **Alertas de demanda inusual**\n\n"
         "¿Qué quieres consultar?"
     )
 
@@ -68,7 +70,13 @@ def handle_ayuda(**kwargs) -> str:
         "• \"Compara enero vs febrero\"\n"
         "• \"¿Cómo van las ventas este mes?\"\n\n"
         "🔮 *Predicciones:*\n"
-        "• \"¿Cuánto vamos a vender la próxima semana?\""
+        "• \"¿Cuánto vamos a vender la próxima semana?\"\n\n"
+        "🛒 *Compras:*\n"
+        "• \"¿Qué debo pedir al proveedor?\"\n"
+        "• \"¿Qué productos reabastecer?\"\n\n"
+        "⚠️ *Alertas de demanda:*\n"
+        "• \"¿Hay alguna anomalía en las ventas?\"\n"
+        "• \"¿Las ventas están por debajo de lo esperado?\""
     )
 
 
@@ -418,7 +426,7 @@ def handle_inventario_stock(params: dict = None, **kwargs) -> str:
     """
     try:
         resultado = query_tenant(
-            "SELECT name, stock, stock_min, "
+            "SELECT p.name, p.stock, p.stock_min, "
             "COALESCE(c.name, 'Sin categoría') AS categoria "
             "FROM inventory_product p "
             "LEFT JOIN inventory_category c ON c.id = p.category_id "
@@ -447,6 +455,112 @@ def handle_inventario_stock(params: dict = None, **kwargs) -> str:
         return '\n'.join(lineas)
     except Exception as e:
         return _error_bd(str(e))
+
+
+def handle_recomendar_compra(params: dict = None, **kwargs) -> str:
+    """
+    Sugiere qué productos pedir al proveedor basándose en stock bajo
+    y proyección de demanda del predictor ML.
+    """
+    try:
+        productos_bajo = query_tenant(
+            "SELECT p.name, p.stock, p.stock_min, "
+            "GREATEST(p.stock_min * 3 - p.stock, p.stock_min) AS cantidad_sugerida, "
+            "COALESCE(c.name, 'Sin categoría') AS categoria "
+            "FROM inventory_product p "
+            "LEFT JOIN inventory_category c ON c.id = p.category_id "
+            "WHERE p.is_active = TRUE AND p.stock <= p.stock_min * 2 "
+            "ORDER BY (p.stock_min - p.stock) DESC LIMIT 10",
+            []
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+    # Intentar obtener proyección ML para enriquecer la respuesta
+    proyeccion_texto = ""
+    try:
+        from django.db import connection as _conn
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=_conn.schema_name, horizon=7)
+        total_semana = sum(p['prediccion'] for p in predicciones)
+        proyeccion_texto = f"\n\n📈 _Proyección ML próxima semana: **{formatear_monto(total_semana)}** — ten stock suficiente._"
+    except Exception:
+        pass
+
+    if not productos_bajo:
+        return (
+            "✅ **Stock suficiente:** todos los productos tienen inventario adecuado "
+            "para las próximas semanas." + proyeccion_texto
+        )
+
+    lineas = [f"🛒 **Recomendación de compra ({len(productos_bajo)} productos):**\n"]
+    for r in productos_bajo:
+        sugerido = int(r['cantidad_sugerida'])
+        lineas.append(
+            f"• **{r['name']}** [{r['categoria']}] — "
+            f"Stock actual: {r['stock']} / Mínimo: {r['stock_min']} → "
+            f"Pedir: **{sugerido} unidades**"
+        )
+    lineas.append(proyeccion_texto)
+    return '\n'.join(lineas)
+
+
+def handle_alerta_demanda(params: dict = None, **kwargs) -> str:
+    """
+    Detecta anomalías comparando ventas reales de las últimas 2 semanas
+    contra la proyección del modelo ML.
+    """
+    hoy = date.today()
+    hace_7 = (hoy - timedelta(days=6)).strftime('%Y-%m-%d')
+    hace_14 = (hoy - timedelta(days=13)).strftime('%Y-%m-%d')
+    hace_8 = (hoy - timedelta(days=7)).strftime('%Y-%m-%d')
+    hoy_str = hoy.strftime('%Y-%m-%d')
+
+    try:
+        sem_actual = query_tenant(
+            "SELECT SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [hace_7, hoy_str]
+        )
+        sem_anterior = query_tenant(
+            "SELECT SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [hace_14, hace_8]
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+    real_actual = float(sem_actual[0]['total'] or 0) if sem_actual else 0.0
+    real_anterior = float(sem_anterior[0]['total'] or 0) if sem_anterior else 0.0
+
+    # Proyección ML de la semana actual
+    proyectado = None
+    try:
+        from django.db import connection as _conn
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=_conn.schema_name, horizon=7)
+        proyectado = sum(p['prediccion'] for p in predicciones)
+    except Exception:
+        pass
+
+    lineas = ["🔍 **Análisis de demanda — últimas 2 semanas:**\n"]
+    lineas.append(f"• Semana anterior (hace 14→8 días): **{formatear_monto(real_anterior)}**")
+    lineas.append(f"• Semana actual (últimos 7 días):   **{formatear_monto(real_actual)}**")
+
+    # Variación semana a semana
+    if real_anterior > 0:
+        variacion = ((real_actual - real_anterior) / real_anterior) * 100
+        emoji = "📈" if variacion >= 0 else "📉"
+        lineas.append(f"\n{emoji} Variación semanal: **{variacion:+.1f}%**")
+        if abs(variacion) >= 20:
+            direction = "caída" if variacion < 0 else "pico"
+            lineas.append(f"⚠️ **Alerta: {direction} inusual de {abs(variacion):.0f}% respecto a la semana anterior.**")
+
+    # Mostrar proyección ML como referencia (no comparar con histórico: son períodos distintos)
+    if proyectado:
+        lineas.append(f"\n🔮 **Proyección ML próxima semana: {formatear_monto(proyectado)}**")
+
+    return '\n'.join(lineas)
 
 
 def handle_desconocido(texto: str, **kwargs) -> str:
@@ -484,6 +598,8 @@ HANDLERS = {
     'prediccion': handle_prediccion,
     'caja_balance': handle_caja,
     'inventario_stock': handle_inventario_stock,
+    'recomendar_compra': handle_recomendar_compra,
+    'alerta_demanda': handle_alerta_demanda,
     'desconocido': handle_desconocido,
 }
 

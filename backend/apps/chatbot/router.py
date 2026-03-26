@@ -45,6 +45,9 @@ INTENT_PATTERNS = {
         r'cuanto vamos a vender',
         r'va a vender',
         r'cuanto venderemos',
+        r'cuanto.*vender[aeéiíu]\b',     # cuanto venderé / vendere / venderá
+        r'vend\w+\s+(de\s+)?manana',      # venderé mañana / ventas de mañana
+        r'ventas?\s+(de\s+)?manana',      # ventas mañana / ventas de mañana
     ],
     # ⚠️ caja_balance ANTES que ventas_por_periodo
     'caja_balance': [
@@ -59,6 +62,15 @@ INTENT_PATTERNS = {
         r'como.*caja',
         r'movimientos? de caja',
         r'flujo de caja',
+    ],
+    # ⚠️ recomendar_compra ANTES que inventario_stock (evitar captura por r'reponer' / r'stock')
+    'recomendar_compra': [
+        r'\b(recomendar|recomienda|recomiendame)\b',
+        r'que\s+debo\s+(pedir|comprar|reponer|ordenar)',
+        r'(pedir|ordenar)\s+al?\s+proveedor',
+        r'que\s+productos?.{0,15}(reponer|pedir|comprar|ordenar)',
+        r'\breabastecer\b',
+        r'cuanto\s+(pedir|comprar)\s+de',
     ],
     'inventario_stock': [
         r'\b(inventario|stock)\b',
@@ -80,16 +92,7 @@ INTENT_PATTERNS = {
         r'diferencia entre',
         r'contra ',
     ],
-    'ventas_hoy': [
-        r'\bhoy\b',
-        r'ventas de hoy',
-        r'cuanto.*hoy',
-        r'vendimos.*hoy',
-    ],
-    'ventas_ayer': [
-        r'\bayer\b',
-        r'ventas de ayer',
-    ],
+    # ⚠️ producto_mas_vendido ANTES que ventas_hoy (evita que "hoy" capture "producto más vendido hoy")
     'producto_mas_vendido': [
         r'producto mas vendido',
         r'que se vende mas',
@@ -102,6 +105,26 @@ INTENT_PATTERNS = {
         r'articulo mas vendido',
         r'item mas vendido',
         r'top \d+',
+    ],
+    'ventas_hoy': [
+        r'\bhoy\b',
+        r'ventas de hoy',
+        r'cuanto.*hoy',
+        r'vendimos.*hoy',
+    ],
+    'ventas_ayer': [
+        r'\bayer\b',
+        r'ventas de ayer',
+    ],
+    # ⚠️ alerta_demanda ANTES que tendencia (evita captura por r'como va')
+    'alerta_demanda': [
+        r'\b(alertas?|anomalias?)\b',
+        r'algo\s+(inusual|raro)\b',
+        r'(caida|desplome|bajada)\s+de\s+ventas',
+        r'prediccion\s+vs\s+(reales?|actual)',
+        r'reales?\s+vs\s+prediccion',
+        r'por\s+(debajo|encima)\s+de\s+lo\s+(esperado|predicho)',
+        r'ventas\s+inusuales?',
     ],
     'tendencia': [
         r'\b(tendencia|crecimiento|evolucion|progreso)\b',
@@ -287,6 +310,7 @@ def extraer_producto(texto: str) -> str | None:
         if match:
             producto = match.group(1).strip()
             producto = re.sub(r'\b(en|del|de|la|el|los|las|este|esta)\s*$', '', producto).strip()
+            producto = re.sub(r'[?!.,;:"\']+$', '', producto).strip()
             if len(producto) > 2:
                 return producto
     return None
@@ -302,20 +326,35 @@ def detectar_intencion(texto: str) -> dict:
     intent_detectado = 'desconocido'
     confianza = 'baja'
 
-    # Caso especial: si hay dos o más pares mes(+año) → comparación
-    pares_mes_año = detectar_pares_mes_año(texto_normalizado)
-    if len(pares_mes_año) >= 2:
-        intent_detectado = 'comparar_periodos'
-        confianza = 'alta'
-    else:
-        for intent, patrones in INTENT_PATTERNS.items():
-            for patron in patrones:
-                if re.search(patron, texto_normalizado):
-                    intent_detectado = intent
-                    confianza = 'alta'
+    # Caso especial: patrones de alerta_demanda que contienen "prediccion"
+    # deben evaluarse ANTES del bucle general (prediccion se evalúa primero en el dict)
+    _ALERTA_PRIORITY = [
+        r'prediccion\s+vs\b',
+        r'\bvs\b.{0,20}prediccion',
+        r'reales?\s+vs\s+prediccion',
+        r'por\s+(debajo|encima)\s+de\s+lo\s+(esperado|predicho)',
+    ]
+    for _pat in _ALERTA_PRIORITY:
+        if re.search(_pat, texto_normalizado):
+            intent_detectado = 'alerta_demanda'
+            confianza = 'alta'
+            break
+
+    if intent_detectado == 'desconocido':
+        # Caso especial: si hay dos o más pares mes(+año) → comparación
+        pares_mes_año = detectar_pares_mes_año(texto_normalizado)
+        if len(pares_mes_año) >= 2:
+            intent_detectado = 'comparar_periodos'
+            confianza = 'alta'
+        else:
+            for intent, patrones in INTENT_PATTERNS.items():
+                for patron in patrones:
+                    if re.search(patron, texto_normalizado):
+                        intent_detectado = intent
+                        confianza = 'alta'
+                        break
+                if intent_detectado != 'desconocido':
                     break
-            if intent_detectado != 'desconocido':
-                break
 
     # Extraer parámetros
     fechas = extraer_fechas(texto)
