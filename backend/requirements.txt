@@ -11,3 +11,12 @@ six==1.17.0
 sqlparse==0.5.5
 tzdata==2025.3
 anthropic>=0.40.0
+catboost>=1.2
+joblib>=1.2
+meteostat>=1.6
+holidays>=0.46
+numpy>=1.24
+pandas>=2.0
+openai>=1.0
+scipy>=1.10
+plotly>=5.0
