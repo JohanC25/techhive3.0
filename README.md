@@ -8,7 +8,7 @@
 
 1. **ERP modular**: ventas, inventario, compras, caja, servicio técnico y reportes, con módulos activables por empresa.
 2. **Predicción de ventas ML**: ensemble de tres modelos CatBoostRegressor (v22) con 78 variables de entrada que incluyen datos climáticos de Quito, feriados ecuatorianos y patrones históricos. Métricas reales en producción: MAPE 16.12 % (Magic World) y 14.87 % (Papelería Alfa & Omega).
-3. **Chatbot inteligente**: arquitectura de tres capas (router regex → handlers SQL → fallback GPT-4o mini) con canales diferenciados para staff interno y clientes externos. 123 casos de prueba, precisión y F1 del 100 %.
+3. **Chatbot inteligente**: arquitectura de tres capas (router regex → handlers SQL → fallback GPT-4o mini) con canales diferenciados para staff interno y clientes externos. 127 casos de prueba (67 staff + 60 cliente), precisión y F1 del 100 %.
 
 ---
 
@@ -598,7 +598,7 @@ techhive3.0/
 │   │   │   ├── client_router.py        ← 7 intenciones cliente
 │   │   │   ├── client_handlers.py      ← catálogo sin exponer costo/SKU/stock exacto
 │   │   │   ├── llm_fallback.py         ← scope guard + GPT-4o mini
-│   │   │   └── evaluar_chatbot.py      ← 123 casos de prueba automatizados
+│   │   │   └── evaluar_chatbot.py      ← 127 casos de prueba automatizados (67 staff + 60 cliente)
 │   │   │
 │   │   ├── prediccion/
 │   │   │   ├── predictor.py            ← TechHivePredictor singleton, forecast v22

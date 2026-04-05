@@ -1,5 +1,5 @@
 # Reporte Completo de Pruebas — Chatbot TechHive 3.0
-**Fecha:** 2026-03-23 (actualizado — v1.2 staff)
+**Fecha:** 2026-03-23 (actualizado — v1.2 staff) | Conteo verificado: 2026-04-04
 **Versión:** TechHive 3.0 — Chatbot v1.2
 **Cobertura:** Staff interno (14 intents) + Cliente externo (7 intents)
 **Evaluador:** `evaluar_chatbot.py` — ejecución sobre router regex (sin BD, sin LLM)
@@ -10,8 +10,8 @@
 
 | Métrica | Staff | Cliente | Total |
 |---------|-------|---------|-------|
-| Total casos ejecutados | 63 | 60 | 123 |
-| Casos PASS | 63 | 60 | 123 |
+| Total casos ejecutados | **67** | 60 | **127** |
+| Casos PASS | **67** | 60 | **127** |
 | Casos FAIL | 0 | 0 | 0 |
 | Precisión global | 100.0% | 100.0% | 100.0% |
 | Macro F1-Score | 100.0% | 100.0% | 100.0% |
@@ -25,7 +25,7 @@
 
 ## 2. Resultados chatbot staff
 
-### Métricas por intent (63 casos — v1.2)
+### Métricas por intent (67 casos — v1.2)
 
 | Intent | TP | FP | FN | Precisión | Recall | F1 |
 |--------|----|----|-----|-----------|--------|----|
@@ -34,16 +34,16 @@
 | ventas_hoy | 5 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | ventas_ayer | 3 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | ventas_por_periodo | 10 | 0 | 0 | 100.0% | 100.0% | 100.0% |
-| producto_mas_vendido | 6 | 0 | 0 | 100.0% | 100.0% | 100.0% |
+| producto_mas_vendido | 7 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | buscar_producto | 4 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | comparar_periodos | 6 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | tendencia | 4 | 0 | 0 | 100.0% | 100.0% | 100.0% |
-| prediccion | 4 | 0 | 0 | 100.0% | 100.0% | 100.0% |
+| prediccion | 7 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | recomendar_compra | 6 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | alerta_demanda | 6 | 0 | 0 | 100.0% | 100.0% | 100.0% |
 | **caja_balance** | — | — | — | — | — | — |
 | **inventario_stock** | — | — | — | — | — | — |
-| **TOTAL** | **63** | **0** | **0** | **100.0%** | **100.0%** | **100.0%** |
+| **TOTAL** | **67** | **0** | **0** | **100.0%** | **100.0%** | **100.0%** |
 
 ### Intents del staff completo (14 — v1.2)
 

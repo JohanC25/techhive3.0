@@ -1,0 +1,79 @@
+index,feature,group,description
+1,tavg,weather,Temperatura promedio diaria (°C) — fuente: Meteostat Quito
+2,tmin,weather,Temperatura mínima diaria (°C)
+3,tmax,weather,Temperatura máxima diaria (°C)
+4,prcp,weather,Precipitación diaria (mm)
+5,snow,weather,Nieve acumulada (mm) — siempre 0 en Quito (variable nativa de Meteostat)
+6,wdir,weather,Dirección del viento (grados)
+7,wspd,weather,Velocidad del viento (km/h)
+8,wpgt,weather,Velocidad máxima de ráfaga (km/h)
+9,pres,weather,Presión atmosférica (hPa)
+10,tsun,weather,Horas de sol (min)
+11,is_holiday,calendar_event,1 si el día es feriado nacional ecuatoriano
+12,is_pre_holiday,calendar_event,1 si el día anterior es feriado (víspera)
+13,is_post_holiday,calendar_event,1 si el día siguiente es feriado (post-feriado)
+14,dayofweek,calendar,Día de la semana (0=lunes … 6=domingo)
+15,day,calendar,Día del mes (1–31)
+16,month,calendar,Mes (1–12)
+17,quarter,calendar,Trimestre (1–4)
+18,weekofyear,calendar,Semana del año (1–52)
+19,is_weekend,calendar,1 si es sábado o domingo
+20,dow_sin,trigonometric,Seno cíclico del día de la semana (2π × dayofweek/7)
+21,dow_cos,trigonometric,Coseno cíclico del día de la semana
+22,month_sin,trigonometric,Seno cíclico del mes (2π × month/12)
+23,month_cos,trigonometric,Coseno cíclico del mes
+24,week_sin,trigonometric,Seno cíclico de la semana del año (2π × weekofyear/52)
+25,week_cos,trigonometric,Coseno cíclico de la semana del año
+26,t,time_index,Índice temporal lineal (días desde el inicio del dataset)
+27,llovio,climate_indicator,1 si prcp > 0 (llovió ese día)
+28,lluvia_fuerte,climate_indicator,1 si prcp > umbral fuerte (lluvia intensa)
+29,calor_alto,climate_indicator,1 si tmax supera umbral de calor alto
+30,frio_bajo,climate_indicator,1 si tmin cae por debajo de umbral de frío
+31,llovio_finsemana,climate_indicator,1 si llovió y es fin de semana (interacción)
+32,prcp_roll_mean_3,rolling_weather,Media móvil de precipitación (últimos 3 días)
+33,tavg_roll_mean_3,rolling_weather,Media móvil de temperatura promedio (últimos 3 días)
+34,wspd_roll_mean_3,rolling_weather,Media móvil de velocidad de viento (últimos 3 días)
+35,prcp_roll_mean_7,rolling_weather,Media móvil de precipitación (últimos 7 días)
+36,tavg_roll_mean_7,rolling_weather,Media móvil de temperatura promedio (últimos 7 días)
+37,wspd_roll_mean_7,rolling_weather,Media móvil de velocidad de viento (últimos 7 días)
+38,lag1,lag,Ventas del día anterior (lag 1)
+39,lag2,lag,Ventas de hace 2 días
+40,lag3,lag,Ventas de hace 3 días
+41,lag7,lag,Ventas de hace 7 días (mismo día semana anterior)
+42,lag14,lag,Ventas de hace 14 días
+43,lag21,lag,Ventas de hace 21 días
+44,lag28,lag,Ventas de hace 28 días
+45,roll_mean_7,rolling_sales,Media de ventas últimos 7 días
+46,roll_std_7,rolling_sales,Desviación estándar de ventas últimos 7 días
+47,roll_max_7,rolling_sales,Máximo de ventas últimos 7 días
+48,roll_min_7,rolling_sales,Mínimo de ventas últimos 7 días
+49,roll_median_7,rolling_sales,Mediana de ventas últimos 7 días
+50,roll_mean_14,rolling_sales,Media de ventas últimos 14 días
+51,roll_std_14,rolling_sales,Desviación estándar de ventas últimos 14 días
+52,roll_max_14,rolling_sales,Máximo de ventas últimos 14 días
+53,roll_min_14,rolling_sales,Mínimo de ventas últimos 14 días
+54,roll_median_14,rolling_sales,Mediana de ventas últimos 14 días
+55,roll_mean_28,rolling_sales,Media de ventas últimos 28 días
+56,roll_std_28,rolling_sales,Desviación estándar de ventas últimos 28 días
+57,roll_max_28,rolling_sales,Máximo de ventas últimos 28 días
+58,roll_min_28,rolling_sales,Mínimo de ventas últimos 28 días
+59,roll_median_28,rolling_sales,Mediana de ventas últimos 28 días
+60,ema_7,exponential_ma,Media móvil exponencial (span=7)
+61,ema_14,exponential_ma,Media móvil exponencial (span=14)
+62,diff1,difference,Diferencia día a día (lag0 - lag1)
+63,diff7,difference,Diferencia semana a semana (lag0 - lag7)
+64,growth_1,difference,Tasa de crecimiento diaria ((lag0/lag1)-1)
+65,growth_7,difference,Tasa de crecimiento semanal ((lag0/lag7)-1)
+66,weak_demand_regime,regime,1 si ventas recientes están por debajo del percentil bajo histórico
+67,high_volatility,regime,1 si la desviación estándar reciente supera umbral de volatilidad
+68,shock_recent,regime,1 si hubo un shock negativo fuerte en los últimos N días
+69,tenant_id,tenant,Identificador numérico del tenant (0=magic_world 1=papeleria)
+70,anchor_base,tenant,Ventas promedio históricas del tenant (base de ratio)
+71,ratio_to_anchor,tenant,Ratio ventas actuales / anchor_base
+72,ratio_to_anchor_log,tenant,Log(ratio_to_anchor) para estabilizar escala
+73,lag1_low,intermittency,1 si ventas del día anterior fueron menores al percentil bajo
+74,lag7_low,intermittency,1 si ventas de hace 7 días fueron menores al percentil bajo
+75,low_demand_streak,intermittency,Número de días consecutivos con baja demanda
+76,days_since_peak,intermittency,Días transcurridos desde el último pico de ventas
+77,positive_pressure,intermittency,Suma de presión positiva acumulada (días de alta demanda recientes)
+78,positive_pressure_ema,intermittency,EMA de positive_pressure (suavizado)

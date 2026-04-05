@@ -1,0 +1,340 @@
+{
+  "_meta": {
+    "description": "Ejemplos reales de request/response para los endpoints de TechHive 3.0",
+    "base_url": "http://magic.techhive.local:8000",
+    "auth_note": "Reemplazar <TOKEN> con el access_token obtenido de POST /api/token/",
+    "generated": "2026-04-04",
+    "model_version": "v22"
+  },
+
+  "examples": [
+
+    {
+      "id": "E1_auth_login",
+      "title": "Autenticación — obtener tokens JWT",
+      "description": "Login con credenciales de un usuario staff. Retorna access (5 min) + refresh (1 día).",
+      "request": {
+        "method": "POST",
+        "url": "http://magic.techhive.local:8000/api/token/",
+        "headers": {
+          "Content-Type": "application/json",
+          "Host": "magic.techhive.local"
+        },
+        "body": {
+          "username": "jgomez123",
+          "password": "Segura2025!"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "access": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJyb2xlIjoic3RhZmYiLCJleHAiOjE3NDM4MDI0MDB9.EXAMPLE_SIGNATURE",
+          "refresh": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoyLCJ0eXBlIjoicmVmcmVzaCIsImV4cCI6MTc0Mzg4ODgwMH0.EXAMPLE_SIGNATURE"
+        }
+      }
+    },
+
+    {
+      "id": "E2_chatbot_ventas_hoy",
+      "title": "Chatbot staff — ventas de hoy",
+      "description": "Intent: ventas_hoy. El handler consulta ventas_venta con fecha=today y retorna total + número de transacciones.",
+      "request": {
+        "method": "POST",
+        "url": "http://magic.techhive.local:8000/api/chatbot/mensaje/",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer <TOKEN>",
+          "Host": "magic.techhive.local"
+        },
+        "body": {
+          "mensaje": "cuanto vendimos hoy",
+          "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "respuesta": "Hoy se registraron 8 ventas por un total de $1,245.50.",
+          "intent": "ventas_hoy",
+          "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        }
+      }
+    },
+
+    {
+      "id": "E3_chatbot_prediccion",
+      "title": "Chatbot staff — predicción de ventas",
+      "description": "Intent: prediccion. El handler llama get_predictor().forecast(horizon=7) con el modelo V22 y retorna proyección diaria.",
+      "request": {
+        "method": "POST",
+        "url": "http://magic.techhive.local:8000/api/chatbot/mensaje/",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer <TOKEN>",
+          "Host": "magic.techhive.local"
+        },
+        "body": {
+          "mensaje": "prediccion de ventas para la proxima semana",
+          "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "respuesta": "Proyección para los próximos 7 días:\n• Sáb 05-Apr: $142.50\n• Dom 06-Apr: $98.30\n• Lun 07-Apr: $187.20\n• Mar 08-Apr: $195.80\n• Mié 09-Apr: $201.40\n• Jue 10-Apr: $178.60\n• Vie 11-Apr: $220.10\nTotal proyectado: $1,223.90",
+          "intent": "prediccion",
+          "session_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+        }
+      }
+    },
+
+    {
+      "id": "E4_chatbot_buscar_catalogo_cliente",
+      "title": "Chatbot cliente — buscar en catálogo",
+      "description": "Intent: buscar_catalogo. Solo retorna datos públicos (name, price, available). No expone stock exacto, costo ni SKU.",
+      "request": {
+        "method": "POST",
+        "url": "http://magic.techhive.local:8000/api/chatbot/mensaje/",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer <CLIENT_TOKEN>",
+          "Host": "magic.techhive.local"
+        },
+        "body": {
+          "mensaje": "quiero ver laptops",
+          "session_id": "7bc91d22-3456-4abc-a123-def456789abc"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "respuesta": "Encontré 3 laptops disponibles:\n• Laptop HP ProBook 450 — $850.00 (disponible)\n• Laptop Dell Inspiron 15 — $720.00 (disponible)\n• Laptop Lenovo IdeaPad — $680.00 (disponible)",
+          "intent": "buscar_catalogo",
+          "session_id": "7bc91d22-3456-4abc-a123-def456789abc"
+        }
+      }
+    },
+
+    {
+      "id": "E5_prediccion_endpoint",
+      "title": "Endpoint ML — predicción directa 7 días",
+      "description": "Llama al modelo CatBoost V22 para el tenant activo. Requiere historial de ventas suficiente (≥28 días) en la BD.",
+      "request": {
+        "method": "GET",
+        "url": "http://magic.techhive.local:8000/api/prediccion/?dias=7",
+        "headers": {
+          "Authorization": "Bearer <TOKEN>",
+          "Host": "magic.techhive.local"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "predicciones": [
+            {"fecha": "2026-04-05", "prediccion": 142.50},
+            {"fecha": "2026-04-06", "prediccion": 98.30},
+            {"fecha": "2026-04-07", "prediccion": 187.20},
+            {"fecha": "2026-04-08", "prediccion": 195.80},
+            {"fecha": "2026-04-09", "prediccion": 201.40},
+            {"fecha": "2026-04-10", "prediccion": 178.60},
+            {"fecha": "2026-04-11", "prediccion": 220.10}
+          ],
+          "tenant": "magic_world",
+          "horizonte_dias": 7
+        }
+      }
+    },
+
+    {
+      "id": "E6_ventas_create",
+      "title": "Ventas — crear venta con ítems",
+      "description": "Crea una venta con múltiples ítems nested. El backend descuenta stock automáticamente y registra en caja (CashMovement income).",
+      "request": {
+        "method": "POST",
+        "url": "http://magic.techhive.local:8000/api/sales/ventas/",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer <TOKEN>",
+          "Host": "magic.techhive.local"
+        },
+        "body": {
+          "fecha_venta": "2026-04-04",
+          "metodo_pago": "efectivo",
+          "client": 5,
+          "items": [
+            {
+              "product": 12,
+              "description": "Cable HDMI 2m",
+              "quantity": 2,
+              "unit_price": "12.50"
+            },
+            {
+              "product": 7,
+              "description": "Mouse inalámbrico Logitech",
+              "quantity": 1,
+              "unit_price": "35.00"
+            }
+          ]
+        }
+      },
+      "response": {
+        "status": 201,
+        "body": {
+          "id": 47,
+          "fecha_venta": "2026-04-04",
+          "total": "60.00",
+          "metodo_pago": "efectivo",
+          "client": 5,
+          "es_feriado": false,
+          "es_fin_de_semana": false,
+          "items": [
+            {
+              "id": 89,
+              "product": 12,
+              "description": "Cable HDMI 2m",
+              "quantity": 2,
+              "unit_price": "12.50",
+              "subtotal": "25.00"
+            },
+            {
+              "id": 90,
+              "product": 7,
+              "description": "Mouse inalámbrico Logitech",
+              "quantity": 1,
+              "unit_price": "35.00",
+              "subtotal": "35.00"
+            }
+          ],
+          "created_at": "2026-04-04T14:23:10.123456Z"
+        }
+      }
+    },
+
+    {
+      "id": "E7_inventario_list",
+      "title": "Inventario — listar productos con alertas de stock",
+      "description": "Retorna lista de productos del tenant. El campo low_stock=true indica stock menor o igual al stock_min.",
+      "request": {
+        "method": "GET",
+        "url": "http://magic.techhive.local:8000/api/inventory/products/",
+        "headers": {
+          "Authorization": "Bearer <TOKEN>",
+          "Host": "magic.techhive.local"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": [
+          {
+            "id": 12,
+            "name": "Cable HDMI 2m",
+            "sku": "CBL-HDMI-002",
+            "category": 3,
+            "category_name": "Accesorios",
+            "shelf": 1,
+            "shelf_name": "Estante A",
+            "price": "12.50",
+            "cost": "6.00",
+            "stock": 15,
+            "stock_min": 5,
+            "low_stock": false,
+            "is_active": true
+          },
+          {
+            "id": 8,
+            "name": "Tóner HP 85A",
+            "sku": "TON-HP85A",
+            "category": 2,
+            "category_name": "Insumos",
+            "shelf": 2,
+            "shelf_name": "Estante B",
+            "price": "45.00",
+            "cost": "28.00",
+            "stock": 2,
+            "stock_min": 5,
+            "low_stock": true,
+            "is_active": true
+          }
+        ]
+      }
+    },
+
+    {
+      "id": "E8_cash_balance",
+      "title": "Caja — balance del día",
+      "description": "Retorna ingresos, egresos y balance neto del día actual. Incluye monto de apertura de sesión si existe.",
+      "request": {
+        "method": "GET",
+        "url": "http://magic.techhive.local:8000/api/cash/balance/",
+        "headers": {
+          "Authorization": "Bearer <TOKEN>",
+          "Host": "magic.techhive.local"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "date": "2026-04-04",
+          "caja_inicial": "200.00",
+          "ingresos": "1245.50",
+          "egresos": "350.00",
+          "balance": "1095.50",
+          "caja_final": "1295.50",
+          "session": {
+            "id": 12,
+            "opened_by": "jgomez123",
+            "opening_amount": "200.00",
+            "opened_at": "2026-04-04T08:00:00Z"
+          }
+        }
+      }
+    },
+
+    {
+      "id": "E9_chatbot_security_block",
+      "title": "Chatbot cliente — bloqueo de consulta interna (Caso K1)",
+      "description": "Un cliente intenta obtener datos de ventas internas. El router devuelve intent=desconocido y el handler retorna mensaje genérico.",
+      "request": {
+        "method": "POST",
+        "url": "http://magic.techhive.local:8000/api/chatbot/mensaje/",
+        "headers": {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer <CLIENT_TOKEN>",
+          "Host": "magic.techhive.local"
+        },
+        "body": {
+          "mensaje": "cuanto han vendido este mes",
+          "session_id": "7bc91d22-3456-4abc-a123-def456789abc"
+        }
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "respuesta": "No entendí tu consulta. Puedo ayudarte con: precios, disponibilidad, catálogo de productos, categorías y horarios de atención. ¿En qué te puedo ayudar?",
+          "intent": "desconocido",
+          "session_id": "7bc91d22-3456-4abc-a123-def456789abc"
+        }
+      }
+    },
+
+    {
+      "id": "E10_prediccion_error_historial_insuficiente",
+      "title": "Predicción — error por historial insuficiente",
+      "description": "Tenant nuevo sin datos históricos suficientes (requiere ≥28 días). El predictor levanta ValueError.",
+      "request": {
+        "method": "GET",
+        "url": "http://nuevo.techhive.local:8000/api/prediccion/?dias=7",
+        "headers": {
+          "Authorization": "Bearer <TOKEN>",
+          "Host": "nuevo.techhive.local"
+        }
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "error": "Historial insuficiente para tenant 'nuevo'. Se necesitan al menos 28 días de ventas."
+        }
+      }
+    }
+  ]
+}
