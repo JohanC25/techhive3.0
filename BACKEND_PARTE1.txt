@@ -1,0 +1,1680 @@
+================================================================================
+  TECHHIVE 3.0 — CÓDIGO FUENTE PARA EVALUACIÓN ACADÉMICA
+  Archivo 1 de 3: CHATBOT — Router y Handlers
+  Generado: 2026-04-04
+================================================================================
+
+=== ARCHIVO: backend/apps/chatbot/router.py ===
+"""
+Router de intenciones para el chatbot TechHive v3.
+Mejoras:
+- Comparación entre dos meses detecta correctamente
+- Detección de año explícito en consultas
+- Orden de prioridad corregido
+"""
+
+import re
+import unicodedata
+from datetime import datetime, timedelta, date
+from calendar import monthrange
+
+
+def normalizar(texto: str) -> str:
+    """Elimina tildes y convierte a minúsculas."""
+    texto = texto.lower()
+    return ''.join(
+        c for c in unicodedata.normalize('NFD', texto)
+        if unicodedata.category(c) != 'Mn'
+    )
+
+
+MESES = {
+    'enero': 1, 'febrero': 2, 'marzo': 3, 'abril': 4,
+    'mayo': 5, 'junio': 6, 'julio': 7, 'agosto': 8,
+    'septiembre': 9, 'octubre': 10, 'noviembre': 11, 'diciembre': 12,
+}
+
+# ─────────────────────────────────────────────
+# PATRONES — orden importa, van de más específico a más general
+# ─────────────────────────────────────────────
+
+INTENT_PATTERNS = {
+    'saludo': [
+        r'\b(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|hi|saludos)\b',
+    ],
+    'ayuda': [
+        r'\b(ayuda|ayudame|que puedes hacer|para que sirves|como funciona|que haces)\b',
+    ],
+    'prediccion': [
+        r'\b(predecir|prediccion|proyeccion|forecast|estimado)\b',
+        r'proxima semana',
+        r'proximo mes',
+        r'cuanto vamos a vender',
+        r'va a vender',
+        r'cuanto venderemos',
+        r'cuanto.*vender[aeéiíu]\b',     # cuanto venderé / vendere / venderá
+        r'vend\w+\s+(de\s+)?manana',      # venderé mañana / ventas de mañana
+        r'ventas?\s+(de\s+)?manana',      # ventas mañana / ventas de mañana
+    ],
+    # ⚠️ caja_balance ANTES que ventas_por_periodo
+    'caja_balance': [
+        r'\bcaja\b',
+        r'\bbalance\b',
+        r'\bingresos?\b',
+        r'\begriesos?\b',
+        r'cuanto.*caja',
+        r'total.*caja',
+        r'cierre.*caja',
+        r'apertura.*caja',
+        r'como.*caja',
+        r'movimientos? de caja',
+        r'flujo de caja',
+    ],
+    # ⚠️ recomendar_compra ANTES que inventario_stock
+    'recomendar_compra': [
+        r'\b(recomendar|recomienda|recomiendame)\b',
+        r'que\s+debo\s+(pedir|comprar|reponer|ordenar)',
+        r'(pedir|ordenar)\s+al?\s+proveedor',
+        r'que\s+productos?.{0,15}(reponer|pedir|comprar|ordenar)',
+        r'\breabastecer\b',
+        r'cuanto\s+(pedir|comprar)\s+de',
+    ],
+    'inventario_stock': [
+        r'\b(inventario|stock)\b',
+        r'bajo stock',
+        r'sin stock',
+        r'agotado',
+        r'productos? (disponibles?|escasos?|faltantes?)',
+        r'cuanto.{0,15}(stock|inventario)',
+        r'que (productos?|articulos?).{0,20}(poco|bajo|quedan)',
+        r'reponer',
+        r'stock minimo',
+    ],
+    # ⚠️ comparar ANTES que ventas_por_periodo
+    'comparar_periodos': [
+        r'\b(comparar|comparacion|versus|comparame|compara)\b',
+        r'\bvs\b',
+        r'mejor mes',
+        r'peor mes',
+        r'diferencia entre',
+        r'contra ',
+    ],
+    # ⚠️ producto_mas_vendido ANTES que ventas_hoy
+    'producto_mas_vendido': [
+        r'producto mas vendido',
+        r'que se vende mas',
+        r'mas popular',
+        r'top producto',
+        r'mejor vendido',
+        r'mas demandado',
+        r'cual se vende',
+        r'que vendemos mas',
+        r'articulo mas vendido',
+        r'item mas vendido',
+        r'top \d+',
+    ],
+    'ventas_hoy': [
+        r'\bhoy\b',
+        r'ventas de hoy',
+        r'cuanto.*hoy',
+        r'vendimos.*hoy',
+    ],
+    'ventas_ayer': [
+        r'\bayer\b',
+        r'ventas de ayer',
+    ],
+    # ⚠️ alerta_demanda ANTES que tendencia
+    'alerta_demanda': [
+        r'\b(alertas?|anomalias?)\b',
+        r'algo\s+(inusual|raro)\b',
+        r'(caida|desplome|bajada)\s+de\s+ventas',
+        r'prediccion\s+vs\s+(reales?|actual)',
+        r'reales?\s+vs\s+prediccion',
+        r'por\s+(debajo|encima)\s+de\s+lo\s+(esperado|predicho)',
+        r'ventas\s+inusuales?',
+    ],
+    'tendencia': [
+        r'\b(tendencia|crecimiento|evolucion|progreso)\b',
+        r'como va',
+        r'como han ido',
+        r'estan? (subiendo|bajando)',
+        r'como van las ventas',
+    ],
+    'buscar_producto': [
+        r'cuanto.*vendimos de ',
+        r'buscame',
+        r'buscar producto',
+        r'cuanto de \w+',
+        r'ventas de (?!enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|hoy|ayer|esta|este|la|el)[a-z]+',
+    ],
+    'ventas_por_periodo': [
+        r'\b(semana|mes|ano|enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
+        r'septiembre|octubre|noviembre|diciembre)\b',
+        r'ultimos \d+ dias',
+        r'hace \d+ dias',
+        r'cuanto.*vendimos',
+        r'total.*ventas',
+        r'ventas.*total',
+        r'resumen.*ventas',
+        r'esta semana',
+        r'este mes',
+        r'mes pasado',
+        r'semana pasada',
+    ],
+}
+
+
+# ─────────────────────────────────────────────
+# DETECCIÓN DE PARES MES+AÑO (para comparación)
+# ─────────────────────────────────────────────
+
+def detectar_pares_mes_año(texto: str) -> list:
+    """
+    Extrae todos los pares (mes, año_opcional) del texto en orden de aparición.
+
+    Ejemplos:
+      "enero 2025 y enero 2026"  → [("enero", 2025), ("enero", 2026)]
+      "compara enero con febrero" → [("enero", None), ("febrero", None)]
+      "enero 2025 vs febrero"    → [("enero", 2025), ("febrero", None)]
+      "ventas de enero"          → [("enero", None)]  ← solo 1, no es comparación
+    """
+    meses_pattern = '|'.join(MESES.keys())
+    pattern = rf'\b({meses_pattern})\b(?:\s+(20\d{{2}}))?'
+    pares = []
+    for m in re.finditer(pattern, texto):
+        año = int(m.group(2)) if m.group(2) else None
+        pares.append((m.group(1), año))
+    return pares
+
+
+# ─────────────────────────────────────────────
+# EXTRACCIÓN DE FECHAS
+# ─────────────────────────────────────────────
+
+def rango_mes(año: int, mes: int) -> tuple:
+    """Retorna (primer_dia, ultimo_dia) de un mes."""
+    ultimo_dia = monthrange(año, mes)[1]
+    return date(año, mes, 1), date(año, mes, ultimo_dia)
+
+
+def inferir_año(num_mes: int, año_explicito: int | None = None) -> int:
+    """
+    Infiere el año correcto para un mes.
+    Si hay año explícito lo usa. Si no, usa el más reciente
+    que no sea futuro respecto a hoy.
+    """
+    if año_explicito:
+        return año_explicito
+    hoy = date.today()
+    if num_mes <= hoy.month:
+        return hoy.year
+    else:
+        return hoy.year - 1
+
+
+def extraer_año_explicito(texto: str) -> int | None:
+    """Busca un año de 4 dígitos en el texto (ej: 2024, 2025)."""
+    match = re.search(r'\b(20\d{2})\b', texto)
+    return int(match.group(1)) if match else None
+
+
+def extraer_fechas(texto: str) -> dict:
+    texto_n = normalizar(texto)
+    hoy = date.today()
+    fecha_inicio = None
+    fecha_fin = None
+
+    año_explicito = extraer_año_explicito(texto_n)
+
+    if re.search(r'\bhoy\b', texto_n):
+        fecha_inicio = fecha_fin = hoy
+
+    elif re.search(r'\bayer\b', texto_n):
+        fecha_inicio = fecha_fin = hoy - timedelta(days=1)
+
+    elif re.search(r'esta semana', texto_n):
+        fecha_inicio = hoy - timedelta(days=hoy.weekday())
+        fecha_fin = hoy
+
+    elif re.search(r'semana pasada', texto_n):
+        lunes = hoy - timedelta(days=hoy.weekday())
+        fecha_inicio = lunes - timedelta(days=7)
+        fecha_fin = lunes - timedelta(days=1)
+
+    elif re.search(r'este mes', texto_n):
+        fecha_inicio = hoy.replace(day=1)
+        fecha_fin = hoy
+
+    elif re.search(r'mes pasado', texto_n):
+        primer_dia = hoy.replace(day=1)
+        fecha_fin = primer_dia - timedelta(days=1)
+        fecha_inicio = fecha_fin.replace(day=1)
+
+    else:
+        for nombre_mes, num_mes in MESES.items():
+            if re.search(rf'\b{nombre_mes}\b', texto_n):
+                año = inferir_año(num_mes, año_explicito)
+                fecha_inicio, fecha_fin = rango_mes(año, num_mes)
+                break
+
+        match = re.search(r'ultimos (\d+) dias', texto_n)
+        if match:
+            n = int(match.group(1))
+            fecha_inicio = hoy - timedelta(days=n)
+            fecha_fin = hoy
+
+    return {
+        'fecha_inicio': fecha_inicio.strftime('%Y-%m-%d') if fecha_inicio else None,
+        'fecha_fin': fecha_fin.strftime('%Y-%m-%d') if fecha_fin else None,
+        'año_explicito': año_explicito,
+    }
+
+
+def extraer_dos_rangos(texto: str) -> dict:
+    """
+    Para comparaciones, extrae dos rangos de fechas con soporte para:
+      - Distintos meses mismo año:     "enero vs febrero"
+      - Mismo mes distintos años:      "enero 2025 vs enero 2026"
+      - Combinaciones mixtas:          "enero 2025 vs febrero 2026"
+    """
+    texto_n = normalizar(texto)
+    pares = detectar_pares_mes_año(texto_n)
+
+    rangos = []
+    mismo_mes = len(pares) >= 2 and pares[0][0] == pares[1][0]
+
+    for nombre_mes, año_explicito in pares[:2]:
+        num_mes = MESES[nombre_mes]
+        año = inferir_año(num_mes, año_explicito)
+        inicio, fin = rango_mes(año, num_mes)
+        nombre = f"{nombre_mes.capitalize()} {año}" if (mismo_mes or año_explicito) else nombre_mes.capitalize()
+        rangos.append({
+            'nombre': nombre,
+            'fecha_inicio': inicio.strftime('%Y-%m-%d'),
+            'fecha_fin': fin.strftime('%Y-%m-%d'),
+        })
+
+    return {
+        'rango1': rangos[0] if len(rangos) > 0 else None,
+        'rango2': rangos[1] if len(rangos) > 1 else None,
+    }
+
+
+def extraer_producto(texto: str) -> str | None:
+    texto_n = normalizar(texto)
+    patrones = [
+        r'vendimos de (.+)',
+        r'ventas de (.+)',
+        r'cuanto.*de (.+)',
+        r'buscame (.+)',
+        r'buscar (.+)',
+    ]
+    for patron in patrones:
+        match = re.search(patron, texto_n)
+        if match:
+            producto = match.group(1).strip()
+            producto = re.sub(r'\b(en|del|de|la|el|los|las|este|esta)\s*$', '', producto).strip()
+            producto = re.sub(r'[?!.,;:"\']+$', '', producto).strip()
+            if len(producto) > 2:
+                return producto
+    return None
+
+
+# ─────────────────────────────────────────────
+# FUNCIÓN PRINCIPAL
+# ─────────────────────────────────────────────
+
+def detectar_intencion(texto: str) -> dict:
+    texto_normalizado = normalizar(texto)
+
+    intent_detectado = 'desconocido'
+    confianza = 'baja'
+
+    # Caso especial: patrones de alerta_demanda que contienen "prediccion"
+    # deben evaluarse ANTES del bucle general
+    _ALERTA_PRIORITY = [
+        r'prediccion\s+vs\b',
+        r'\bvs\b.{0,20}prediccion',
+        r'reales?\s+vs\s+prediccion',
+        r'por\s+(debajo|encima)\s+de\s+lo\s+(esperado|predicho)',
+    ]
+    for _pat in _ALERTA_PRIORITY:
+        if re.search(_pat, texto_normalizado):
+            intent_detectado = 'alerta_demanda'
+            confianza = 'alta'
+            break
+
+    if intent_detectado == 'desconocido':
+        # Caso especial: si hay dos o más pares mes(+año) → comparación
+        pares_mes_año = detectar_pares_mes_año(texto_normalizado)
+        if len(pares_mes_año) >= 2:
+            intent_detectado = 'comparar_periodos'
+            confianza = 'alta'
+        else:
+            for intent, patrones in INTENT_PATTERNS.items():
+                for patron in patrones:
+                    if re.search(patron, texto_normalizado):
+                        intent_detectado = intent
+                        confianza = 'alta'
+                        break
+                if intent_detectado != 'desconocido':
+                    break
+
+    # Extraer parámetros
+    fechas = extraer_fechas(texto)
+    producto = extraer_producto(texto)
+
+    # Para comparaciones extraer dos rangos
+    rangos_comparacion = None
+    if intent_detectado == 'comparar_periodos':
+        rangos_comparacion = extraer_dos_rangos(texto)
+
+    if intent_detectado == 'desconocido' and fechas['fecha_inicio']:
+        intent_detectado = 'ventas_por_periodo'
+        confianza = 'media'
+
+    return {
+        'intent': intent_detectado,
+        'params': {
+            'fecha_inicio': fechas['fecha_inicio'],
+            'fecha_fin': fechas['fecha_fin'],
+            'producto': producto,
+            'rangos_comparacion': rangos_comparacion,
+            'año_explicito': fechas.get('año_explicito'),
+        },
+        'confianza': confianza,
+        'texto_original': texto,
+    }
+=== FIN ===
+
+=== ARCHIVO: backend/apps/chatbot/handlers.py ===
+"""
+Handlers del chatbot TechHive.
+Cada función recibe los parámetros extraídos por el router,
+consulta la BD del tenant activo y retorna una respuesta en lenguaje natural.
+"""
+
+from datetime import date, timedelta
+from django.db import connection
+
+
+# ─────────────────────────────────────────────
+# HELPER: ejecutar query en el schema del tenant
+# ─────────────────────────────────────────────
+
+def query_tenant(sql: str, params: list = None) -> list:
+    """
+    Ejecuta una query raw en la conexión actual.
+    En arquitectura multi-tenant con django-tenants, el schema
+    ya está seteado en el middleware según el dominio del request.
+    """
+    with connection.cursor() as cursor:
+        cursor.execute(sql, params or [])
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def formatear_monto(valor) -> str:
+    """Formatea un número como moneda: $1,234.56"""
+    if valor is None:
+        return '$0.00'
+    return f'${float(valor):,.2f}'
+
+
+def formatear_periodo(fecha_inicio: str, fecha_fin: str) -> str:
+    """Convierte fechas a texto legible"""
+    if fecha_inicio == fecha_fin:
+        return f"el {fecha_inicio}"
+    return f"del {fecha_inicio} al {fecha_fin}"
+
+
+# ─────────────────────────────────────────────
+# HANDLERS POR INTENCIÓN
+# ─────────────────────────────────────────────
+
+def handle_saludo(**kwargs) -> str:
+    return (
+        "¡Hola! Soy el asistente de TechHive 👋\n\n"
+        "Puedo ayudarte con:\n"
+        "• 📊 **Ventas del día, semana o mes**\n"
+        "• 🏆 **Productos más vendidos**\n"
+        "• 📈 **Tendencias y comparaciones**\n"
+        "• 🔮 **Predicciones de ventas ML**\n"
+        "• 🛒 **Recomendación de compra a proveedores**\n"
+        "• ⚠️ **Alertas de demanda inusual**\n\n"
+        "¿Qué quieres consultar?"
+    )
+
+
+def handle_ayuda(**kwargs) -> str:
+    return (
+        "Aquí tienes ejemplos de lo que puedes preguntarme:\n\n"
+        "🗓️ *Ventas por período:*\n"
+        "• \"¿Cuánto vendimos hoy?\"\n"
+        "• \"Total de ventas de enero\"\n"
+        "• \"Resumen de la semana pasada\"\n\n"
+        "🏆 *Productos:*\n"
+        "• \"¿Cuál es el producto más vendido?\"\n"
+        "• \"¿Cuánto vendimos de impresiones?\"\n\n"
+        "📈 *Comparaciones:*\n"
+        "• \"Compara enero vs febrero\"\n"
+        "• \"¿Cómo van las ventas este mes?\"\n\n"
+        "🔮 *Predicciones:*\n"
+        "• \"¿Cuánto vamos a vender la próxima semana?\"\n\n"
+        "🛒 *Compras:*\n"
+        "• \"¿Qué debo pedir al proveedor?\"\n"
+        "• \"¿Qué productos reabastecer?\"\n\n"
+        "⚠️ *Alertas de demanda:*\n"
+        "• \"¿Hay alguna anomalía en las ventas?\"\n"
+        "• \"¿Las ventas están por debajo de lo esperado?\""
+    )
+
+
+def handle_ventas_hoy(**kwargs) -> str:
+    hoy = date.today().strftime('%Y-%m-%d')
+    try:
+        resultado = query_tenant(
+            "SELECT COUNT(*) as transacciones, SUM(total) as total_ventas "
+            "FROM ventas_venta WHERE DATE(fecha_venta) = %s",
+            [hoy]
+        )
+        if resultado and resultado[0]['total_ventas']:
+            r = resultado[0]
+            return (
+                f"📊 **Ventas de hoy ({hoy}):**\n"
+                f"• Total: **{formatear_monto(r['total_ventas'])}**\n"
+                f"• Transacciones: **{r['transacciones']}**"
+            )
+        else:
+            return f"No se registraron ventas hoy ({hoy}) todavía."
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_ventas_ayer(**kwargs) -> str:
+    ayer = (date.today() - timedelta(days=1)).strftime('%Y-%m-%d')
+    try:
+        resultado = query_tenant(
+            "SELECT COUNT(*) as transacciones, SUM(total) as total_ventas "
+            "FROM ventas_venta WHERE DATE(fecha_venta) = %s",
+            [ayer]
+        )
+        if resultado and resultado[0]['total_ventas']:
+            r = resultado[0]
+            return (
+                f"📊 **Ventas de ayer ({ayer}):**\n"
+                f"• Total: **{formatear_monto(r['total_ventas'])}**\n"
+                f"• Transacciones: **{r['transacciones']}**"
+            )
+        else:
+            return f"No se encontraron ventas para ayer ({ayer})."
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_ventas_por_periodo(params: dict, **kwargs) -> str:
+    fecha_inicio = params.get('fecha_inicio')
+    fecha_fin = params.get('fecha_fin')
+
+    if not fecha_inicio or not fecha_fin:
+        return (
+            "No pude detectar el período que quieres consultar. "
+            "Intenta con algo como: \"ventas de enero\" o \"ventas de esta semana\"."
+        )
+
+    try:
+        resultado = query_tenant(
+            "SELECT COUNT(*) as transacciones, SUM(total) as total_ventas, "
+            "AVG(total) as promedio_venta "
+            "FROM ventas_venta WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [fecha_inicio, fecha_fin]
+        )
+        periodo = formatear_periodo(fecha_inicio, fecha_fin)
+        if resultado and resultado[0]['total_ventas']:
+            r = resultado[0]
+            return (
+                f"📊 **Ventas {periodo}:**\n"
+                f"• Total: **{formatear_monto(r['total_ventas'])}**\n"
+                f"• Transacciones: **{r['transacciones']}**\n"
+                f"• Promedio por venta: **{formatear_monto(r['promedio_venta'])}**"
+            )
+        else:
+            return f"No se encontraron ventas {periodo}."
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_producto_mas_vendido(params: dict, **kwargs) -> str:
+    fecha_inicio = params.get('fecha_inicio')
+    fecha_fin = params.get('fecha_fin')
+
+    if not fecha_inicio:
+        hoy = date.today()
+        fecha_inicio = hoy.replace(day=1).strftime('%Y-%m-%d')
+        fecha_fin = hoy.strftime('%Y-%m-%d')
+        periodo_texto = "este mes"
+    else:
+        periodo_texto = formatear_periodo(fecha_inicio, fecha_fin)
+
+    try:
+        resultado = query_tenant(
+            "SELECT vi.description, SUM(vi.quantity) as veces_vendido, "
+            "SUM(vi.subtotal) as total_generado "
+            "FROM ventas_ventaitem vi "
+            "JOIN ventas_venta v ON v.id = vi.venta_id "
+            "WHERE DATE(v.fecha_venta) BETWEEN %s AND %s "
+            "GROUP BY vi.description "
+            "ORDER BY total_generado DESC "
+            "LIMIT 5",
+            [fecha_inicio, fecha_fin]
+        )
+        if resultado:
+            lineas = [f"🏆 **Top 5 productos más vendidos ({periodo_texto}):**\n"]
+            medallas = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣']
+            for i, r in enumerate(resultado):
+                lineas.append(
+                    f"{medallas[i]} {r['description']} — "
+                    f"**{formatear_monto(r['total_generado'])}** "
+                    f"({r['veces_vendido']} unidades)"
+                )
+            return '\n'.join(lineas)
+        else:
+            return f"No se encontraron ítems de venta {periodo_texto}."
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_buscar_producto(params: dict, **kwargs) -> str:
+    producto = params.get('producto')
+    fecha_inicio = params.get('fecha_inicio')
+    fecha_fin = params.get('fecha_fin')
+
+    if not producto:
+        return "¿De qué producto quieres ver las ventas? Intenta: \"ventas de impresiones\"."
+
+    if not fecha_inicio:
+        hoy = date.today()
+        fecha_inicio = hoy.replace(day=1).strftime('%Y-%m-%d')
+        fecha_fin = hoy.strftime('%Y-%m-%d')
+        periodo_texto = "este mes"
+    else:
+        periodo_texto = formatear_periodo(fecha_inicio, fecha_fin)
+
+    try:
+        resultado = query_tenant(
+            "SELECT COUNT(DISTINCT v.id) as transacciones, SUM(vi.subtotal) as total_ventas "
+            "FROM ventas_ventaitem vi "
+            "JOIN ventas_venta v ON v.id = vi.venta_id "
+            "WHERE LOWER(vi.description) LIKE LOWER(%s) "
+            "AND DATE(v.fecha_venta) BETWEEN %s AND %s",
+            [f'%{producto}%', fecha_inicio, fecha_fin]
+        )
+        if resultado and resultado[0]['total_ventas']:
+            r = resultado[0]
+            return (
+                f"🔍 **Ventas de \"{producto}\" ({periodo_texto}):**\n"
+                f"• Total: **{formatear_monto(r['total_ventas'])}**\n"
+                f"• Transacciones: **{r['transacciones']}**"
+            )
+        else:
+            return (
+                f"No encontré ventas de \"{producto}\" {periodo_texto}. "
+                f"Verifica el nombre del producto."
+            )
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_comparar_periodos(params: dict, **kwargs) -> str:
+    """
+    Compara dos períodos. Si el usuario especificó dos meses los usa,
+    si no, compara mes actual vs mes anterior.
+    """
+    rangos = params.get('rangos_comparacion')
+
+    if rangos and rangos.get('rango1') and rangos.get('rango2'):
+        r1 = rangos['rango1']
+        r2 = rangos['rango2']
+        nombre1 = r1['nombre'].capitalize()
+        nombre2 = r2['nombre'].capitalize()
+        inicio1, fin1 = r1['fecha_inicio'], r1['fecha_fin']
+        inicio2, fin2 = r2['fecha_inicio'], r2['fecha_fin']
+    else:
+        from datetime import date, timedelta
+        hoy = date.today()
+        inicio1_d = hoy.replace(day=1)
+        fin1_d = hoy
+        fin2_d = inicio1_d - timedelta(days=1)
+        inicio2_d = fin2_d.replace(day=1)
+        inicio1, fin1 = inicio1_d.strftime('%Y-%m-%d'), fin1_d.strftime('%Y-%m-%d')
+        inicio2, fin2 = inicio2_d.strftime('%Y-%m-%d'), fin2_d.strftime('%Y-%m-%d')
+        nombre1, nombre2 = 'Mes actual', 'Mes anterior'
+
+    try:
+        res1 = query_tenant(
+            "SELECT COUNT(*) as tx, SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [inicio1, fin1]
+        )
+        res2 = query_tenant(
+            "SELECT COUNT(*) as tx, SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [inicio2, fin2]
+        )
+
+        total1 = float(res1[0]['total'] or 0)
+        total2 = float(res2[0]['total'] or 0)
+        tx1 = res1[0]['tx']
+        tx2 = res2[0]['tx']
+
+        if total2 > 0:
+            variacion = ((total1 - total2) / total2) * 100
+            emoji = "📈" if variacion >= 0 else "📉"
+            direccion = "más" if variacion >= 0 else "menos"
+            comparativa = f"{emoji} **{nombre1}** vendió un **{abs(variacion):.1f}% {direccion}** que **{nombre2}**"
+        else:
+            comparativa = f"No hay datos de {nombre2} para comparar."
+
+        return (
+            f"📊 **Comparación {nombre1} vs {nombre2}:**\n\n"
+            f"• {nombre1}: **{formatear_monto(total1)}** ({tx1} ventas)\n"
+            f"• {nombre2}: **{formatear_monto(total2)}** ({tx2} ventas)\n\n"
+            f"{comparativa}"
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_tendencia(**kwargs) -> str:
+    hoy = date.today()
+    lineas = ["📈 **Tendencia de ventas (últimas 4 semanas):**\n"]
+
+    try:
+        for i in range(3, -1, -1):
+            fin = hoy - timedelta(weeks=i)
+            inicio = fin - timedelta(days=6)
+            resultado = query_tenant(
+                "SELECT SUM(total) as total FROM ventas_venta "
+                "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+                [inicio.strftime('%Y-%m-%d'), fin.strftime('%Y-%m-%d')]
+            )
+            total = float(resultado[0]['total'] or 0) if resultado else 0
+            semana_label = "Semana actual" if i == 0 else f"Hace {i} semana(s)"
+            lineas.append(f"• {semana_label}: **{formatear_monto(total)}**")
+        return '\n'.join(lineas)
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_prediccion(params: dict = None, **kwargs) -> str:
+    """
+    Proyecta ventas usando el modelo ML CatBoost v22.
+    Extrae el horizonte del mensaje: día, semana (default) o mes.
+    """
+    texto = kwargs.get('texto', '')
+    from .router import normalizar
+    texto_n = normalizar(texto)
+
+    if any(p in texto_n for p in ['dia', 'manana', 'mañana']):
+        horizon = 1
+        label = 'mañana'
+    elif any(p in texto_n for p in ['mes', 'mensual', 'proximo mes']):
+        horizon = 30
+        label = 'el próximo mes'
+    else:
+        horizon = 7
+        label = 'la próxima semana'
+
+    try:
+        from django.db import connection as _conn
+        tenant_slug = _conn.schema_name
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=tenant_slug, horizon=horizon)
+
+        total = sum(p['prediccion'] for p in predicciones)
+        lineas = [f"🔮 **Proyección ML para {label}:**\n"]
+        for p in predicciones:
+            lineas.append(f"• {p['fecha']}: **{formatear_monto(p['prediccion'])}**")
+        if horizon > 1:
+            lineas.append(f"\n📊 **Total estimado: {formatear_monto(total)}**")
+        lineas.append("\n_Modelo CatBoost v22 entrenado con datos históricos de TechHive._")
+        return '\n'.join(lineas)
+
+    except ValueError as exc:
+        return (
+            "🔮 **Proyección de ventas:**\n"
+            f"No es posible generar una predicción: {exc}\n"
+            "_Se necesitan al menos 28 días de ventas registradas._"
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_caja(params: dict = None, **kwargs) -> str:
+    """
+    Consulta el balance de caja (ingresos, egresos, neto) para el período indicado.
+    Por defecto muestra el balance del día actual.
+    """
+    params = params or {}
+    fecha_inicio = params.get('fecha_inicio')
+    fecha_fin = params.get('fecha_fin')
+
+    hoy = date.today().strftime('%Y-%m-%d')
+    if not fecha_inicio:
+        fecha_inicio = fecha_fin = hoy
+        periodo_texto = 'hoy'
+    else:
+        periodo_texto = formatear_periodo(fecha_inicio, fecha_fin)
+
+    try:
+        movimientos = query_tenant(
+            "SELECT type, SUM(amount) as total FROM cash_movement "
+            "WHERE date BETWEEN %s AND %s GROUP BY type",
+            [fecha_inicio, fecha_fin]
+        )
+        ingresos = 0.0
+        egresos = 0.0
+        for r in movimientos:
+            if r['type'] == 'income':
+                ingresos = float(r['total'])
+            elif r['type'] == 'expense':
+                egresos = float(r['total'])
+
+        monto_inicial = 0.0
+        if fecha_inicio == fecha_fin:
+            sesion = query_tenant(
+                "SELECT opening_amount FROM cash_session WHERE date = %s",
+                [fecha_inicio]
+            )
+            if sesion:
+                monto_inicial = float(sesion[0]['opening_amount'])
+
+        balance = monto_inicial + ingresos - egresos
+        emoji = '✅' if balance >= 0 else '⚠️'
+
+        lineas = [f"💰 **Balance de caja ({periodo_texto}):**\n"]
+        if monto_inicial:
+            lineas.append(f"• Apertura: **{formatear_monto(monto_inicial)}**")
+        lineas += [
+            f"• Ingresos: **{formatear_monto(ingresos)}**",
+            f"• Egresos: **{formatear_monto(egresos)}**",
+            f"• {emoji} Caja final: **{formatear_monto(balance)}**",
+        ]
+        return '\n'.join(lineas)
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_inventario_stock(params: dict = None, **kwargs) -> str:
+    """
+    Muestra productos con stock bajo (stock <= stock_min) del inventario.
+    """
+    try:
+        resultado = query_tenant(
+            "SELECT p.name, p.stock, p.stock_min, "
+            "COALESCE(c.name, 'Sin categoría') AS categoria "
+            "FROM inventory_product p "
+            "LEFT JOIN inventory_category c ON c.id = p.category_id "
+            "WHERE p.is_active = TRUE AND p.stock <= p.stock_min "
+            "ORDER BY p.stock ASC LIMIT 10",
+            []
+        )
+        total_bajo = query_tenant(
+            "SELECT COUNT(*) as total FROM inventory_product "
+            "WHERE is_active = TRUE AND stock <= stock_min",
+            []
+        )
+        n_total = total_bajo[0]['total'] if total_bajo else 0
+
+        if not resultado:
+            return "✅ **Stock al día:** todos los productos tienen stock suficiente."
+
+        lineas = [f"⚠️ **Productos con stock bajo ({n_total} en total):**\n"]
+        for r in resultado:
+            lineas.append(
+                f"• **{r['name']}** [{r['categoria']}] — "
+                f"Stock: {r['stock']} / Mínimo: {r['stock_min']}"
+            )
+        if n_total > 10:
+            lineas.append(f"\n_Mostrando los 10 más críticos de {n_total}._")
+        return '\n'.join(lineas)
+    except Exception as e:
+        return _error_bd(str(e))
+
+
+def handle_recomendar_compra(params: dict = None, **kwargs) -> str:
+    """
+    Sugiere qué productos pedir al proveedor basándose en stock bajo
+    y proyección de demanda del predictor ML.
+    """
+    try:
+        productos_bajo = query_tenant(
+            "SELECT p.name, p.stock, p.stock_min, "
+            "GREATEST(p.stock_min * 3 - p.stock, p.stock_min) AS cantidad_sugerida, "
+            "COALESCE(c.name, 'Sin categoría') AS categoria "
+            "FROM inventory_product p "
+            "LEFT JOIN inventory_category c ON c.id = p.category_id "
+            "WHERE p.is_active = TRUE AND p.stock <= p.stock_min * 2 "
+            "ORDER BY (p.stock_min - p.stock) DESC LIMIT 10",
+            []
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+    proyeccion_texto = ""
+    try:
+        from django.db import connection as _conn
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=_conn.schema_name, horizon=7)
+        total_semana = sum(p['prediccion'] for p in predicciones)
+        proyeccion_texto = f"\n\n📈 _Proyección ML próxima semana: **{formatear_monto(total_semana)}** — ten stock suficiente._"
+    except Exception:
+        pass
+
+    if not productos_bajo:
+        return (
+            "✅ **Stock suficiente:** todos los productos tienen inventario adecuado "
+            "para las próximas semanas." + proyeccion_texto
+        )
+
+    lineas = [f"🛒 **Recomendación de compra ({len(productos_bajo)} productos):**\n"]
+    for r in productos_bajo:
+        sugerido = int(r['cantidad_sugerida'])
+        lineas.append(
+            f"• **{r['name']}** [{r['categoria']}] — "
+            f"Stock actual: {r['stock']} / Mínimo: {r['stock_min']} → "
+            f"Pedir: **{sugerido} unidades**"
+        )
+    lineas.append(proyeccion_texto)
+    return '\n'.join(lineas)
+
+
+def handle_alerta_demanda(params: dict = None, **kwargs) -> str:
+    """
+    Detecta anomalías comparando ventas reales de las últimas 2 semanas
+    contra la proyección del modelo ML.
+    """
+    hoy = date.today()
+    hace_7 = (hoy - timedelta(days=6)).strftime('%Y-%m-%d')
+    hace_14 = (hoy - timedelta(days=13)).strftime('%Y-%m-%d')
+    hace_8 = (hoy - timedelta(days=7)).strftime('%Y-%m-%d')
+    hoy_str = hoy.strftime('%Y-%m-%d')
+
+    try:
+        sem_actual = query_tenant(
+            "SELECT SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [hace_7, hoy_str]
+        )
+        sem_anterior = query_tenant(
+            "SELECT SUM(total) as total FROM ventas_venta "
+            "WHERE DATE(fecha_venta) BETWEEN %s AND %s",
+            [hace_14, hace_8]
+        )
+    except Exception as e:
+        return _error_bd(str(e))
+
+    real_actual = float(sem_actual[0]['total'] or 0) if sem_actual else 0.0
+    real_anterior = float(sem_anterior[0]['total'] or 0) if sem_anterior else 0.0
+
+    proyectado = None
+    try:
+        from django.db import connection as _conn
+        from apps.prediccion.predictor import get_predictor
+        predicciones = get_predictor().forecast(tenant_slug=_conn.schema_name, horizon=7)
+        proyectado = sum(p['prediccion'] for p in predicciones)
+    except Exception:
+        pass
+
+    lineas = ["🔍 **Análisis de demanda — últimas 2 semanas:**\n"]
+    lineas.append(f"• Semana anterior (hace 14→8 días): **{formatear_monto(real_anterior)}**")
+    lineas.append(f"• Semana actual (últimos 7 días):   **{formatear_monto(real_actual)}**")
+
+    if real_anterior > 0:
+        variacion = ((real_actual - real_anterior) / real_anterior) * 100
+        emoji = "📈" if variacion >= 0 else "📉"
+        lineas.append(f"\n{emoji} Variación semanal: **{variacion:+.1f}%**")
+        if abs(variacion) >= 20:
+            direction = "caída" if variacion < 0 else "pico"
+            lineas.append(f"⚠️ **Alerta: {direction} inusual de {abs(variacion):.0f}% respecto a la semana anterior.**")
+
+    if proyectado:
+        lineas.append(f"\n🔮 **Proyección ML próxima semana: {formatear_monto(proyectado)}**")
+
+    return '\n'.join(lineas)
+
+
+def handle_desconocido(texto: str, **kwargs) -> str:
+    return (
+        f"No entendí bien tu consulta: *\"{texto}\"*\n\n"
+        "Intenta con preguntas como:\n"
+        "• \"¿Cuánto vendimos hoy?\"\n"
+        "• \"Ventas de enero\"\n"
+        "• \"¿Cuál es el producto más vendido?\"\n\n"
+        "O escribe **ayuda** para ver todos los ejemplos."
+    )
+
+
+def _error_bd(detalle: str) -> str:
+    return (
+        "⚠️ Hubo un problema al consultar los datos. "
+        "Verifica que la base de datos esté configurada correctamente."
+    )
+
+
+# ─────────────────────────────────────────────
+# DISPATCHER — mapea intención → handler
+# ─────────────────────────────────────────────
+
+HANDLERS = {
+    'saludo': handle_saludo,
+    'ayuda': handle_ayuda,
+    'ventas_hoy': handle_ventas_hoy,
+    'ventas_ayer': handle_ventas_ayer,
+    'ventas_por_periodo': handle_ventas_por_periodo,
+    'producto_mas_vendido': handle_producto_mas_vendido,
+    'buscar_producto': handle_buscar_producto,
+    'comparar_periodos': handle_comparar_periodos,
+    'tendencia': handle_tendencia,
+    'prediccion': handle_prediccion,
+    'caja_balance': handle_caja,
+    'inventario_stock': handle_inventario_stock,
+    'recomendar_compra': handle_recomendar_compra,
+    'alerta_demanda': handle_alerta_demanda,
+    'desconocido': handle_desconocido,
+}
+
+
+def ejecutar_intencion(resultado_router: dict) -> str:
+    """
+    Recibe el output del router y ejecuta el handler correspondiente.
+    """
+    intent = resultado_router.get('intent', 'desconocido')
+    params = resultado_router.get('params', {})
+    texto = resultado_router.get('texto_original', '')
+
+    handler = HANDLERS.get(intent, handle_desconocido)
+    return handler(params=params, texto=texto)
+=== FIN ===
+
+=== ARCHIVO: backend/apps/chatbot/client_router.py ===
+"""
+Router de intenciones del chatbot para clientes — TechHive v1.
+Orientado exclusivamente al catálogo: precios, disponibilidad y búsqueda.
+No expone información de ventas, costos ni stock exacto.
+"""
+
+import re
+try:
+    from .router import normalizar
+except ImportError:
+    from router import normalizar
+
+
+# ─────────────────────────────────────────────
+# PATRONES — orden importa: más específico primero
+# ─────────────────────────────────────────────
+
+CLIENT_INTENT_PATTERNS = {
+    'saludo': [
+        r'\b(hola|buenas|buenos dias|buenas tardes|buenas noches|hey|hi|saludos)\b',
+    ],
+    'ayuda': [
+        r'\b(ayuda|ayudame|que puedes hacer|para que sirves|como funciona|que haces|comandos)\b',
+        r'\b(en que me ayudas|como te uso)\b',
+    ],
+    # horarios_contacto ANTES que listar_categorias y verificar_disponibilidad
+    'horarios_contacto': [
+        r'\bhorario\b',
+        r'a\s+que\s+hora',
+        r'como\s+(?:los\s+)?contact(?:o|an)',
+        r'telefono\s+de\s+(?:contacto|la\s+tienda|la\s+empresa|ustedes)',
+        r'whatsapp\s+de\s+(?:la\s+tienda|la\s+empresa|contacto|ustedes)',
+        r'donde\s+estan\s+ubicados?',
+        r'direccion\s+de\s+la\s+(?:tienda|empresa)',
+    ],
+    'listar_categorias': [
+        r'\b(categorias|tipos de producto|que productos tienen|que tipo de productos)\b',
+        r'\b(cuales son las categorias|ver categorias|mostrar categorias|lineas de productos)\b',
+        r'\bque\b.{0,20}\b(venden|manejan|ofrecen|trabajan|tienen)\b',
+    ],
+    # Precio ANTES que disponibilidad y buscar_catalogo (más específico)
+    'consultar_precio': [
+        r'\b(cuanto cuesta|cuanto cuestan|cuanto vale|cuanto valen|cuanto sale|cuanto salen|cual es el precio|precio de|precio del|cuanto es)\b',
+        r'\bprecio\b.{0,20}\bde\b',
+        r'\bcuanto.{0,10}(cuesta|cuestan|vale|valen|sale)\b',
+    ],
+    'verificar_disponibilidad': [
+        r'\b(hay|tienen|tienes|existe|lo tienen|lo tienes|cuentan con)\b.{1,40}',
+        r'\b(esta disponible|tiene stock|hay stock|en stock|disponible|en existencia)\b',
+        r'\b(puedo comprar|puedo conseguir|se puede conseguir|lo puedo encontrar)\b',
+    ],
+    'buscar_catalogo': [
+        r'\b(busca|buscar|busco|muestra|mostrar|ver|quiero ver|dame|ensenme|muestrame)\b.{1,40}',
+        r'\b(productos de|articulos de|que tienen de|catalogo de)\b',
+        r'\bver (el )?catalogo\b',
+    ],
+}
+
+# Orden de evaluación de intenciones
+PRIORITY_ORDER = [
+    'saludo',
+    'ayuda',
+    'horarios_contacto',
+    'listar_categorias',
+    'consultar_precio',
+    'verificar_disponibilidad',
+    'buscar_catalogo',
+]
+
+
+# ─────────────────────────────────────────────
+# EXTRACCIÓN DE PRODUCTO
+# ─────────────────────────────────────────────
+
+def extraer_nombre_producto_cliente(texto: str) -> str | None:
+    """Extrae el nombre del producto de una consulta de cliente."""
+    texto_n = normalizar(texto)
+    patrones = [
+        r'cuanto cuesta(?:n)? (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto vale(?:n)? (?:el |la |los |las |un |una )?(.+)',
+        r'cuanto sale(?:n)? (?:el |la |los |las |un |una )?(.+)',
+        r'precio de(?:l)? (?:el |la |los |las |un |una )?(.+)',
+        r'hay (?:el |la |los |las |un |una )?(.+)',
+        r'tienen (?:el |la |los |las |un |una )?(.+)',
+        r'tienes (?:el |la |los |las |un |una )?(.+)',
+        r'cuentan con (?:el |la |los |las |un |una )?(.+)',
+        r'esta disponible (?:el |la |los |las |un |una )?(.+)',
+        r'busca(?:r)? (?:el |la |los |las |un |una )?(.+)',
+        r'muestra(?:me)? (?:el |la |los |las |un |una )?(.+)',
+        r'muestrame (?:el |la |los |las |un |una )?(.+)',
+        r'quiero ver (?:el |la |los |las |un |una )?(.+)',
+        r'dame (?:el |la |los |las |un |una )?(.+)',
+        r'ver (?:el |la |los |las |un |una )?(.+)',
+        r'productos de (.+)',
+        r'articulos de (.+)',
+        r'catalogo de (.+)',
+    ]
+    for patron in patrones:
+        match = re.search(patron, texto_n)
+        if match:
+            nombre = match.group(1).strip()
+            nombre = re.sub(
+                r'\b(en stock|disponible|ahora|por favor|porfavor|gracias|'
+                r'hoy|disponibles|please)\s*$',
+                '', nombre
+            ).strip()
+            nombre = re.sub(r'\s+', ' ', nombre).strip()
+            nombre = re.sub(r'[?!.,;:"\']+$', '', nombre).strip()
+            nombre = re.sub(r'^(dentro de|en la|en el|de la|del|de los|de las|en)\s+', '', nombre).strip()
+            if len(nombre) > 2:
+                return nombre
+    return None
+
+
+# ─────────────────────────────────────────────
+# FUNCIÓN PRINCIPAL
+# ─────────────────────────────────────────────
+
+def detectar_intencion_cliente(texto: str) -> dict:
+    """
+    Detecta la intención de un mensaje de cliente.
+    Retorna dict compatible con ejecutar_intencion_cliente().
+    """
+    texto_n = normalizar(texto)
+
+    intent_detectado = 'desconocido'
+    confianza = 'baja'
+
+    for intent in PRIORITY_ORDER:
+        for patron in CLIENT_INTENT_PATTERNS.get(intent, []):
+            if re.search(patron, texto_n):
+                intent_detectado = intent
+                confianza = 'alta'
+                break
+        if intent_detectado != 'desconocido':
+            break
+
+    producto = extraer_nombre_producto_cliente(texto)
+
+    return {
+        'intent': intent_detectado,
+        'params': {'producto': producto},
+        'confianza': confianza,
+        'texto_original': texto,
+    }
+=== FIN ===
+
+=== ARCHIVO: backend/apps/chatbot/client_handlers.py ===
+"""
+Handlers del chatbot para clientes — TechHive.
+Solo consulta el catálogo público: nombre, precio, disponibilidad, categoría.
+No expone: costo, SKU, stock exacto, datos de ventas ni información interna.
+"""
+
+from django.db import connection
+
+
+# ─────────────────────────────────────────────
+# HELPERS DE CONSULTA
+# ─────────────────────────────────────────────
+
+def _normalizar(texto: str) -> str:
+    """Elimina tildes y convierte a minúsculas para comparaciones."""
+    import unicodedata
+    texto = texto.lower()
+    return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
+
+
+def query_catalogo(search: str = '', only_available: bool = False) -> list:
+    """Consulta productos del catálogo del tenant activo.
+    El filtrado por texto se hace en Python (tolerante a tildes y plurales).
+    """
+    try:
+        sql = """
+            SELECT
+                p.name,
+                p.description,
+                p.price,
+                (p.stock > 0) AS available,
+                c.name AS category
+            FROM inventory_product p
+            LEFT JOIN inventory_category c ON p.category_id = c.id
+            WHERE p.is_active = TRUE
+        """
+        params = []
+        if only_available:
+            sql += " AND p.stock > 0"
+        sql += " ORDER BY p.name LIMIT 200"
+
+        with connection.cursor() as cursor:
+            cursor.execute(sql, params)
+            cols = [c[0] for c in cursor.description]
+            rows = [dict(zip(cols, row)) for row in cursor.fetchall()]
+
+        if search:
+            search_n = _normalizar(search)
+            # Palabras de búsqueda, quitando plural simple (cables→cable, audifonos→audifono)
+            words = []
+            for w in search_n.split():
+                if len(w) > 3 and w.endswith('s'):
+                    words.append(w[:-1])  # sin la 's' final
+                else:
+                    words.append(w)
+            words = [w for w in words if len(w) > 1]
+
+            def matches(p):
+                haystack = _normalizar(
+                    f"{p['name']} {p.get('description') or ''} {p.get('category') or ''}"
+                )
+                return all(w in haystack for w in words)
+
+            rows = [p for p in rows if matches(p)]
+
+        return rows[:10]
+    except Exception:
+        return []
+
+
+def query_categorias() -> list:
+    """Retorna categorías que tienen al menos un producto activo."""
+    try:
+        sql = """
+            SELECT DISTINCT c.name
+            FROM inventory_category c
+            INNER JOIN inventory_product p ON p.category_id = c.id
+            WHERE p.is_active = TRUE
+            ORDER BY c.name
+        """
+        with connection.cursor() as cursor:
+            cursor.execute(sql)
+            return [row[0] for row in cursor.fetchall()]
+    except Exception:
+        return []
+
+
+def fmt_precio(valor) -> str:
+    if valor is None:
+        return '$0.00'
+    return f'${float(valor):,.2f}'
+
+
+# ─────────────────────────────────────────────
+# HANDLERS
+# ─────────────────────────────────────────────
+
+def handle_saludo_cliente(**kwargs) -> str:
+    return (
+        "¡Hola! Soy el asistente de TechHive 👋\n\n"
+        "Puedo ayudarte a:\n"
+        "• 🔍 **Buscar productos** en nuestro catálogo\n"
+        "• 💰 **Consultar precios** de cualquier artículo\n"
+        "• ✅ **Verificar disponibilidad** de stock\n"
+        "• 📦 **Explorar categorías** de productos\n"
+        "• 🕐 **Consultar horarios** y datos de contacto\n\n"
+        "¿Qué estás buscando hoy?"
+    )
+
+
+def handle_ayuda_cliente(**kwargs) -> str:
+    return (
+        "Aquí tienes ejemplos de lo que puedes preguntarme:\n\n"
+        "💰 *Precios:*\n"
+        "• \"¿Cuánto cuesta el laptop HP?\"\n"
+        "• \"¿Cuál es el precio del mouse?\"\n\n"
+        "✅ *Disponibilidad:*\n"
+        "• \"¿Tienen teclados disponibles?\"\n"
+        "• \"¿Hay auriculares en stock?\"\n\n"
+        "🔍 *Buscar productos:*\n"
+        "• \"Muéstrame productos de audio\"\n"
+        "• \"Busca impresoras\"\n\n"
+        "📦 *Categorías:*\n"
+        "• \"¿Qué categorías tienen?\"\n"
+        "• \"¿Qué tipo de productos venden?\"\n\n"
+        "🕐 *Horarios y contacto:*\n"
+        "• \"¿A qué hora abren?\"\n"
+        "• \"¿Cómo los contacto?\""
+    )
+
+
+def handle_consultar_precio(params: dict, **kwargs) -> str:
+    producto = params.get('producto')
+    if not producto:
+        return (
+            "¿De qué producto quieres saber el precio? "
+            "Intenta: \"¿Cuánto cuesta el laptop?\""
+        )
+
+    resultados = query_catalogo(search=producto)
+    if not resultados:
+        return (
+            f"No encontré productos que coincidan con **\"{producto}\"**.\n"
+            f"Intenta con otro nombre o escribe **categorías** para ver lo que tenemos."
+        )
+
+    if len(resultados) == 1:
+        p = resultados[0]
+        estado = "✅ Disponible" if p['available'] else "❌ Sin stock"
+        lineas = [
+            f"💰 **{p['name']}**\n",
+            f"• Precio: **{fmt_precio(p['price'])}**",
+            f"• Estado: {estado}",
+        ]
+        if p['category']:
+            lineas.append(f"• Categoría: {p['category']}")
+        return '\n'.join(lineas)
+
+    lineas = [f"💰 **Productos que coinciden con \"{producto}\":**\n"]
+    for p in resultados[:6]:
+        estado = "✅" if p['available'] else "❌"
+        lineas.append(f"• {estado} **{p['name']}** — {fmt_precio(p['price'])}")
+    return '\n'.join(lineas)
+
+
+def handle_verificar_disponibilidad(params: dict, **kwargs) -> str:
+    producto = params.get('producto')
+    if not producto:
+        return (
+            "¿Qué producto quieres verificar? "
+            "Intenta: \"¿Hay laptops disponibles?\""
+        )
+
+    resultados = query_catalogo(search=producto)
+    if not resultados:
+        return (
+            f"No encontré **\"{producto}\"** en nuestro catálogo. "
+            f"Puede que no esté registrado. Escribe **categorías** para ver lo que tenemos."
+        )
+
+    disponibles = [p for p in resultados if p['available']]
+    sin_stock = [p for p in resultados if not p['available']]
+
+    if disponibles:
+        lineas = [f"✅ **Disponible(s) — \"{producto}\":**\n"]
+        for p in disponibles[:5]:
+            lineas.append(f"• **{p['name']}** — {fmt_precio(p['price'])}")
+        if sin_stock:
+            nombres = ', '.join(p['name'] for p in sin_stock[:3])
+            lineas.append(f"\n❌ Sin stock: {nombres}")
+        return '\n'.join(lineas)
+    else:
+        nombres = ', '.join(p['name'] for p in sin_stock[:3])
+        return (
+            f"❌ **\"{producto}\"** está momentáneamente sin stock.\n"
+            f"Artículos afectados: {nombres}\n\n"
+            f"Te recomendamos consultar pronto por reposición."
+        )
+
+
+def handle_buscar_catalogo(params: dict, **kwargs) -> str:
+    producto = params.get('producto')
+    resultados = query_catalogo(search=producto or '')
+
+    if not resultados:
+        if producto:
+            return (
+                f"No encontré productos relacionados con **\"{producto}\"**.\n"
+                f"Escribe **categorías** para ver lo que tenemos disponible."
+            )
+        return "No hay productos en el catálogo por el momento."
+
+    titulo = f"Resultados para **\"{producto}\"**" if producto else "**Catálogo de productos**"
+    lineas = [f"🔍 {titulo}:\n"]
+    for p in resultados:
+        estado = "✅" if p['available'] else "❌"
+        cat = f" [{p['category']}]" if p['category'] else ""
+        lineas.append(f"• {estado} **{p['name']}**{cat} — {fmt_precio(p['price'])}")
+    if len(resultados) == 10:
+        lineas.append("\n_Mostrando los primeros 10 resultados. Sé más específico para filtrar mejor._")
+    return '\n'.join(lineas)
+
+
+def handle_listar_categorias(**kwargs) -> str:
+    categorias = query_categorias()
+    if not categorias:
+        return "No hay categorías de productos registradas por el momento."
+
+    lineas = ["📦 **Categorías de productos disponibles:**\n"]
+    for cat in categorias:
+        lineas.append(f"• {cat}")
+    lineas.append("\n_Pregúntame por cualquier categoría para ver sus productos._")
+    return '\n'.join(lineas)
+
+
+def handle_horarios_contacto(**kwargs) -> str:
+    """
+    Responde sobre horarios de atención y contacto del tenant activo.
+    Intenta obtener el nombre de la empresa desde el schema público.
+    """
+    empresa = "nuestra empresa"
+    try:
+        from django.db import connection as conn
+        schema = conn.schema_name
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT name FROM public.tenants_company WHERE schema_name = %s",
+                [schema]
+            )
+            row = cur.fetchone()
+            if row:
+                empresa = row[0]
+    except Exception:
+        pass
+
+    return (
+        f"Para conocer los **horarios de atención** y datos de contacto de **{empresa}**, "
+        "te recomendamos comunicarte directamente con nosotros.\n\n"
+        "Mientras tanto, puedo ayudarte con:\n"
+        "• 💰 Consultar precios de productos\n"
+        "• ✅ Verificar disponibilidad\n"
+        "• 🔍 Buscar en nuestro catálogo"
+    )
+
+
+def handle_desconocido_cliente(texto: str, **kwargs) -> str:
+    return (
+        f"No entendí bien tu consulta: *\"{texto}\"*\n\n"
+        "Puedes preguntarme:\n"
+        "• \"¿Cuánto cuesta el laptop?\"\n"
+        "• \"¿Tienen auriculares disponibles?\"\n"
+        "• \"Muéstrame productos de audio\"\n"
+        "• \"¿Qué categorías tienen?\"\n\n"
+        "O escribe **ayuda** para ver más ejemplos."
+    )
+
+
+# ─────────────────────────────────────────────
+# DISPATCHER
+# ─────────────────────────────────────────────
+
+CLIENT_HANDLERS = {
+    'saludo':                   handle_saludo_cliente,
+    'ayuda':                    handle_ayuda_cliente,
+    'horarios_contacto':        handle_horarios_contacto,
+    'consultar_precio':         handle_consultar_precio,
+    'verificar_disponibilidad': handle_verificar_disponibilidad,
+    'buscar_catalogo':          handle_buscar_catalogo,
+    'listar_categorias':        handle_listar_categorias,
+    'desconocido':              handle_desconocido_cliente,
+}
+
+
+def ejecutar_intencion_cliente(resultado_router: dict) -> str:
+    """Recibe el output del client_router y ejecuta el handler correspondiente."""
+    intent = resultado_router.get('intent', 'desconocido')
+    params = resultado_router.get('params', {})
+    texto = resultado_router.get('texto_original', '')
+
+    handler = CLIENT_HANDLERS.get(intent, handle_desconocido_cliente)
+    return handler(params=params, texto=texto)
+=== FIN ===
+
+=== ARCHIVO: backend/apps/chatbot/llm_fallback.py ===
+"""
+Fallback LLM para el chatbot TechHive.
+Se invoca SOLO cuando el router regex no detecta intención (desconocido)
+Y la consulta pasa el scope guard de dominio.
+
+Flujo:
+  regex (alta confianza, gratis)
+    → si desconocido → scope guard
+        → fuera de dominio → respuesta estática (sin LLM)
+        → dentro de dominio → GPT-4o mini (fallback pago, acotado al negocio)
+"""
+
+import re
+import os
+import unicodedata
+from openai import OpenAI
+
+_client = None
+
+
+# ─────────────────────────────────────────────
+# SCOPE GUARD
+# ─────────────────────────────────────────────
+
+_DOMAIN_KEYWORDS_STAFF = {
+    'venta', 'ventas', 'vender', 'vendimos', 'vendido', 'vendiste', 'vendi',
+    'compra', 'compras', 'proveedor',
+    'producto', 'productos', 'articulo', 'articulos', 'item', 'items',
+    'inventario', 'stock', 'existencia', 'existencias',
+    'caja', 'balance', 'ingreso', 'ingresos', 'egreso', 'egresos',
+    'prediccion', 'proyeccion', 'forecast', 'estimado', 'estimacion',
+    'semana', 'mes', 'meses', 'periodo', 'periodos', 'ano', 'anual',
+    'ticket', 'servicio', 'tecnico',
+    'categoria', 'categorias', 'precio', 'precios', 'costo', 'costos',
+    'factura', 'cobro', 'pago', 'total', 'tendencia', 'comparar',
+    'dashboard', 'reporte', 'informe',
+}
+
+_DOMAIN_KEYWORDS_CLIENTE = {
+    'producto', 'productos', 'articulo', 'articulos',
+    'precio', 'precios', 'cuesta', 'vale', 'costo',
+    'stock', 'disponible', 'disponibles', 'existencia',
+    'categoria', 'categorias', 'catalogo',
+    'comprar', 'adquirir', 'conseguir',
+    'hay', 'tienen', 'tienes', 'buscar', 'busco',
+    'oferta', 'descuento', 'promocion',
+}
+
+
+def _normalizar(texto: str) -> str:
+    """Convierte a minúsculas y elimina tildes para comparación."""
+    nfkd = unicodedata.normalize('NFKD', texto.lower())
+    return ''.join(c for c in nfkd if not unicodedata.combining(c))
+
+
+def is_in_domain(message: str, canal: str) -> bool:
+    """
+    Determina si un mensaje pertenece al dominio TechHive.
+    Retorna True si la consulta menciona términos del negocio.
+    """
+    texto = _normalizar(message)
+    keywords = _DOMAIN_KEYWORDS_STAFF if canal == 'staff' else _DOMAIN_KEYWORDS_CLIENTE
+    palabras = set(re.findall(r'\b[a-z]+\b', texto))
+    return bool(palabras & keywords)
+
+
+def out_of_domain_response(canal: str) -> str:
+    """Respuesta estática para consultas fuera del dominio de TechHive."""
+    if canal == 'staff':
+        return (
+            "Lo siento, solo puedo ayudarte con consultas sobre el negocio. "
+            "¿En qué puedo ayudarte?\n\n"
+            "Por ejemplo puedes preguntarme:\n"
+            "• \"¿Cuánto vendimos hoy?\"\n"
+            "• \"¿Qué productos tienen bajo stock?\"\n"
+            "• \"¿Cuál es el balance de caja?\"\n"
+            "• \"Compara enero con febrero\""
+        )
+    return (
+        "Solo puedo ayudarte con consultas sobre nuestro catálogo de productos. "
+        "¿Estás buscando algo en particular?\n\n"
+        "Por ejemplo:\n"
+        "• \"¿Cuánto cuesta el laptop?\"\n"
+        "• \"¿Hay auriculares disponibles?\"\n"
+        "• \"¿Qué categorías tienen?\""
+    )
+
+
+# ─────────────────────────────────────────────
+# CLIENTE OPENAI
+# ─────────────────────────────────────────────
+
+def _get_client() -> OpenAI | None:
+    """Retorna el cliente de OpenAI, o None si no hay API key configurada."""
+    global _client
+    if _client is not None:
+        return _client
+    api_key = os.getenv('OPENAI_API_KEY', '')
+    if not api_key:
+        return None
+    _client = OpenAI(api_key=api_key)
+    return _client
+
+
+# ─────────────────────────────────────────────
+# FALLBACKS LLM (solo se llaman si is_in_domain == True)
+# ─────────────────────────────────────────────
+
+def fallback_staff(texto: str) -> str | None:
+    """
+    Fallback para el chatbot de staff (dentro del dominio).
+    GPT-4o mini ayuda a reformular o interpretar la consulta de negocio.
+    Retorna None si no hay API key configurada.
+    """
+    client = _get_client()
+    if not client:
+        return None
+
+    system = (
+        "Eres el asistente comercial de TechHive ERP. "
+        "SOLO puedes responder consultas sobre el negocio: "
+        "ventas, inventario, caja, compras y predicciones de ventas.\n\n"
+        "Puedo responder sobre:\n"
+        "• Ventas del día, semana, mes o período específico\n"
+        "• Productos más vendidos o búsqueda por producto\n"
+        "• Comparación entre períodos (ej: enero vs febrero)\n"
+        "• Tendencias y evolución de ventas\n"
+        "• Balance de caja e ingresos/egresos\n"
+        "• Stock e inventario\n\n"
+        "Si la consulta no es sobre estos temas, indica que no puedes ayudar "
+        "y sugiere una consulta válida del negocio. "
+        "NO respondas temas fuera del dominio comercial. "
+        "Responde en español, máximo 4 líneas. Sé directo y útil."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=200,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": texto},
+            ],
+        )
+        return response.choices[0].message.content
+    except Exception:
+        return None
+
+
+def fallback_cliente(texto: str, categorias: list[str] | None = None) -> str | None:
+    """
+    Fallback para el chatbot de clientes (dentro del dominio).
+    GPT-4o mini conoce las categorías del catálogo y ayuda a encontrar productos.
+    Retorna None si no hay API key configurada.
+    """
+    client = _get_client()
+    if not client:
+        return None
+
+    contexto_categorias = ""
+    if categorias:
+        lista = ", ".join(categorias)
+        contexto_categorias = f"\n\nCategorías disponibles en el catálogo: {lista}."
+
+    system = (
+        "Eres el asistente virtual de TechHive. "
+        "Tu ÚNICA función es ayudar a los clientes con el catálogo de productos."
+        f"{contexto_categorias}\n\n"
+        "SOLO puedes responder sobre:\n"
+        "- Productos disponibles en el catálogo\n"
+        "- Precios y descripciones de productos\n"
+        "- Categorías disponibles\n"
+        "- Información general de la tienda (productos, servicios)\n\n"
+        "NUNCA respondas sobre:\n"
+        "- Ventas internas o facturación de la empresa\n"
+        "- Niveles de stock exactos (solo disponible/no disponible)\n"
+        "- Costos de adquisición o márgenes\n"
+        "- Información de otras empresas o tenants\n"
+        "- Predicciones de demanda o proyecciones\n"
+        "- Temas fuera del catálogo (clima, noticias, etc.)\n\n"
+        "Si la pregunta está fuera de estos temas, responde exactamente: "
+        "'Esa información no está disponible. Puedo ayudarte con el catálogo de "
+        "productos, precios y disponibilidad.'\n\n"
+        "NO inventes precios ni disponibilidad. "
+        "Responde en español, máximo 3-4 líneas. Sé amigable y comercial."
+    )
+
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            max_tokens=200,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": texto},
+            ],
+        )
+        return response.choices[0].message.content
+    except Exception:
+        return None
+=== FIN ===
+
+================================================================================
+  RESUMEN — BACKEND_PARTE1.txt
+================================================================================
+
+Archivos incluidos:
+  1. backend/apps/chatbot/router.py        — 384 líneas
+  2. backend/apps/chatbot/handlers.py      — 617 líneas
+  3. backend/apps/chatbot/client_router.py — 148 líneas
+  4. backend/apps/chatbot/client_handlers.py — 303 líneas
+  5. backend/apps/chatbot/llm_fallback.py  — 203 líneas
+
+Arquitectura del chatbot (3 capas en cascada):
+  Capa 1 — Router regex (router.py / client_router.py):
+    Staff:   14 intents | Patrones regex sin BD ni LLM | O(1)
+    Cliente:  7 intents | Solo catálogo público
+
+  Capa 2 — Handlers SQL (handlers.py / client_handlers.py):
+    Queries raw contra el schema del tenant activo (django-tenants)
+    Integración con predictor ML v22 (handle_prediccion, handle_recomendar_compra,
+    handle_alerta_demanda)
+
+  Capa 3 — Fallback LLM (llm_fallback.py):
+    Scope guard → is_in_domain() bloquea consultas fuera del negocio
+    GPT-4o mini con system prompt acotado (max 200 tokens)
+    Staff y cliente con prompts y restricciones independientes
+
+================================================================================
