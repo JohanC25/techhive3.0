@@ -4,7 +4,7 @@ Carpeta centralizada de evidencias técnicas para evaluación académica.
 Cada subcarpeta contiene archivos reproducibles, métricas reales y ejemplos ejecutables.
 
 **Sistema evaluado:** TechHive 3.0 — ERP SaaS multi-tenant con ML y chatbot inteligente
-**Fecha de corte:** 2026-04-04
+**Fecha de corte:** 2026-04-06
 **Versión del modelo:** v22 (CatBoost ensemble)
 **Versión del chatbot:** v1.2
 
@@ -30,9 +30,10 @@ evidences/
 │
 ├── chatbot/                           ← Evidencias del sistema conversacional
 │   ├── conversations.md               ← Conversaciones completas para los 21 intents
-│   ├── test_results_staff.md          ← Resultados 63 casos staff (precisión/F1 por intent)
+│   ├── test_results_staff.md          ← Resultados 67 casos staff (precisión/F1 por intent)
 │   ├── test_results_client.md         ← Resultados 60 casos cliente (precisión/F1 por intent)
 │   ├── security_tests.md              ← Grupo K (8 casos) + análisis de seguridad de datos
+│   ├── robustness_tests.md            ← 28 casos: ruido lingüístico + inyección + limitaciones
 │   └── run_eval.sh                    ← Script: ejecuta evaluar_chatbot.py y captura salida
 │
 └── integration/                       ← Evidencias de integración del sistema
@@ -63,9 +64,10 @@ evidences/
 | 7 | `model/features_list.csv` | Transparencia del modelo: 78 variables explicadas |
 | 8 | `model/hyperparameters.json` | Reproducibilidad: configuración exacta del entrenamiento |
 | 9 | `chatbot/conversations.md` | Demostración cualitativa del chatbot |
-| 10 | `integration/tenant_isolation.md` | Prueba técnica del aislamiento de datos |
-| 11 | `integration/erp_workflow.md` | Integración entre módulos ERP |
-| 12 | `api/test_api.sh` | Prueba activa de todos los endpoints |
+| 10 | `chatbot/robustness_tests.md` | 28 casos: robustez lingüística + inyección + limitaciones |
+| 11 | `integration/tenant_isolation.md` | Prueba técnica del aislamiento de datos |
+| 12 | `integration/erp_workflow.md` | Integración entre módulos ERP |
+| 13 | `api/test_api.sh` | Prueba activa de todos los endpoints |
 
 ---
 
@@ -82,14 +84,17 @@ evidences/
 
 ### Chatbot v1.2
 
-| Canal | Intents | Casos | Precisión | Macro F1 |
-|-------|---------|-------|-----------|----------|
-| Staff interno | 14 | **67** | **100.0%** | **100.0%** |
-| Cliente externo | 7 | 60 | **100.0%** | **100.0%** |
-| Seguridad (Grupo K) | — | 8 | **100.0%** | — |
-| Aislamiento (Grupo M) | — | 5 | **100.0%** | — |
+| Suite | Casos | PASS | % |
+|-------|-------|------|---|
+| Exactitud staff | 67 | 67 | **100%** |
+| Exactitud cliente | 60 | 60 | **100%** |
+| Seguridad (Grupo K) | 8 | 8 | **100%** |
+| Aislamiento (Grupo M) | 5 | 5 | **100%** |
+| Robustez lingüística | 22 | 22 | **100%** |
+| Inyección adversarial | 8 | 8 | **100%** |
+| Limitaciones (typos) | 6 | — | documentado |
 
-> Fuente: `evaluar_chatbot.py` ejecutado 2026-04-04 — salida real: **67/67** staff, **60/60** cliente
+> Fuente: `evaluar_chatbot.py` ejecutado 2026-04-06 — salida real verificada
 
 ---
 
@@ -104,6 +109,7 @@ python evidences/model/export_metrics.py
 cd backend/apps/chatbot
 python evaluar_chatbot.py --version "v1.2" --modo staff
 python evaluar_chatbot.py --version "v1.2" --modo cliente
+python evaluar_chatbot.py --version "v1.2" --modo robustez
 
 # 3. Tests de API (requiere servidor corriendo en localhost:8000)
 bash evidences/api/test_api.sh
