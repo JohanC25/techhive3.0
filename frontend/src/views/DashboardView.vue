@@ -104,8 +104,8 @@
             </div>
           </div>
           <div class="chart-legend">
-            <span>{{ chartData[0]?.fecha_venta }}</span>
-            <span>{{ chartData[chartData.length - 1]?.fecha_venta }}</span>
+            <span>{{ fmtFecha(chartData[0]?.fecha_venta) }}</span>
+            <span>{{ fmtFecha(chartData[chartData.length - 1]?.fecha_venta) }}</span>
           </div>
         </div>
         <div v-else class="empty-chart">Sin datos para el período seleccionado</div>
@@ -204,9 +204,16 @@ function fmt(val: number) {
   return `$${Number(val || 0).toLocaleString('es-EC', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 }
 
+function fmtFecha(iso?: string) {
+  if (!iso) return ''
+  const [, m, d] = iso.split('-')
+  const meses = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  return `${parseInt(d)} ${meses[parseInt(m)]}`
+}
+
 function barHeight(val: number) {
-  const max = Math.max(...chartData.value.map((d) => d.total), 1)
-  return Math.max((val / max) * 100, 2)
+  const max = Math.max(...chartData.value.map((d) => Number(d.total)), 1)
+  return Math.max((Number(val) / max) * 100, 2)
 }
 
 onMounted(loadDashboard)
@@ -310,7 +317,7 @@ onMounted(loadDashboard)
   height: 120px;
   overflow: hidden;
 }
-.bar-col { flex: 1; display: flex; align-items: flex-end; }
+.bar-col { flex: 1; display: flex; align-items: flex-end; height: 100%; }
 .bar {
   width: 100%;
   background: #2563eb;
