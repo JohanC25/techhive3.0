@@ -325,14 +325,20 @@ def handle_prediccion(params: dict = None, **kwargs) -> str:
     Proyecta ventas usando el modelo ML CatBoost v22.
     Extrae el horizonte del mensaje: día, semana (default) o mes.
     """
+    import re
     texto = kwargs.get('texto', '')
     from .router import normalizar
     texto_n = normalizar(texto)
 
-    if any(p in texto_n for p in ['dia', 'manana', 'mañana']):
+    # Extraer número explícito: "próximos 14 días", "7 días", etc.
+    m = re.search(r'(\d+)\s*dias?', texto_n)
+    if m:
+        horizon = min(int(m.group(1)), 30)  # máximo 30 días
+        label = f'los próximos {horizon} días'
+    elif 'manana' in texto_n or re.search(r'\bdia\b', texto_n):
         horizon = 1
         label = 'mañana'
-    elif any(p in texto_n for p in ['mes', 'mensual', 'proximo mes']):
+    elif 'mes' in texto_n or 'mensual' in texto_n:
         horizon = 30
         label = 'el próximo mes'
     else:
