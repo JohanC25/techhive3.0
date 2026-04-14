@@ -1,4 +1,4 @@
-# TechHive 3.0
+# TechHive 3.0:
 
 ## 1. Descripción del problema y solución
 
