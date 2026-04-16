@@ -57,13 +57,14 @@
 
         <!-- Input -->
         <div class="chat-input-area">
-          <input
+          <textarea
             v-model="inputText"
-            @keydown.enter="enviarMensaje"
+            @keydown.enter.exact.prevent="enviarMensaje"
             :disabled="cargando"
             placeholder="Escribe tu pregunta..."
             class="chat-input"
             ref="inputRef"
+            rows="1"
           />
           <button
             @click="enviarMensaje"
@@ -91,7 +92,7 @@ const cargando = ref(false)
 const inputText = ref('')
 const sessionId = ref('')
 const messagesContainer = ref<HTMLElement | null>(null)
-const inputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<HTMLTextAreaElement | null>(null)
 
 interface Mensaje {
   role: 'user' | 'bot'
@@ -436,11 +437,19 @@ function renderMarkdown(texto: string): string {
   flex: 1;
   padding: 10px 14px;
   border: 1px solid #e2e8f0;
-  border-radius: 24px;
+  border-radius: 16px;
   font-size: 13.5px;
   outline: none;
   background: #f8fafc;
   transition: border-color 0.2s;
+  resize: none;
+  min-height: 38px;
+  max-height: 100px;
+  overflow-y: auto;
+  line-height: 1.5;
+  font-family: inherit;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 .chat-input:focus {
   border-color: #2563eb;
