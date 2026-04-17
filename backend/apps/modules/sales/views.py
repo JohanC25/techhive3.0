@@ -14,7 +14,7 @@ class VentaViewSet(viewsets.ModelViewSet):
     serializer_class = VentaSerializer
     permission_classes = [IsAuthenticated, IsNotClient]
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
-    search_fields = ['descripcion', 'metodo_pago']
+    search_fields = ['metodo_pago', 'items__description']
     ordering_fields = ['fecha_venta', 'total', 'created_at']
 
     def get_queryset(self):
@@ -49,13 +49,35 @@ class VentaViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='por-producto')
     def por_producto(self, request):
         """GET /api/sales/ventas/por-producto/ — top productos por total vendido"""
-        qs = self.get_queryset()
+        from .models import VentaItem
+        fecha_inicio = request.query_params.get('fecha_inicio')
+        fecha_fin = request.query_params.get('fecha_fin')
+
+        item_qs = VentaItem.objects.all()
+        if fecha_inicio:
+            item_qs = item_qs.filter(venta__fecha_venta__gte=fecha_inicio)
+        if fecha_fin:
+            item_qs = item_qs.filter(venta__fecha_venta__lte=fecha_fin)
+
         datos = (
-            qs.values('descripcion')
-            .annotate(total=Sum('total'), cantidad=Sum('cantidad'), ventas=Count('id'))
+            item_qs
+            .values('description')
+            .annotate(
+                total=Sum('subtotal'),
+                cantidad=Sum('quantity'),
+                ventas=Count('venta', distinct=True),
+            )
             .order_by('-total')[:20]
         )
-        return Response(list(datos))
+        return Response([
+            {
+                'descripcion': d['description'],
+                'cantidad': d['cantidad'],
+                'total': d['total'],
+                'ventas': d['ventas'],
+            }
+            for d in datos
+        ])
 
     @action(detail=False, methods=['get'], url_path='por-metodo-pago')
     def por_metodo_pago(self, request):

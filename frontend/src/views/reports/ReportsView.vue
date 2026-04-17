@@ -100,8 +100,8 @@
             </div>
           </div>
           <div class="bar-axis">
-            <span>{{ salesByDay[0]?.fecha_venta }}</span>
-            <span>{{ salesByDay[salesByDay.length - 1]?.fecha_venta }}</span>
+            <span>{{ fmtFecha(salesByDay[0]?.fecha_venta) }}</span>
+            <span>{{ fmtFecha(salesByDay[salesByDay.length - 1]?.fecha_venta) }}</span>
           </div>
         </div>
         <div v-else class="chart-empty">Sin datos para el período</div>
@@ -297,7 +297,7 @@ async function loadAll() {
       api.get(`/sales/ventas/por-metodo-pago/?${qs}`),
       api.get(`/sales/ventas/por-producto/?${qs}`),
       api.get(`/reports/compras/?${qs}`),
-      api.get(`/cash/movements/?${qs}&page_size=200`),
+      api.get(`/reports/cash-por-categoria/?${qs}`),
     ])
     dash.value = dashRes.data
     salesByDay.value = salesDayRes.data
@@ -305,20 +305,19 @@ async function loadAll() {
     topProducts.value = (topProdRes.data || []).slice(0, 8)
     purchasesSummary.value = purchRes.data
     purchasesByStatus.value = purchRes.data.by_status || []
-    // aggregate cash by category client-side
-    const movements: any[] = cashRes.data.results || []
-    const map: Record<string, { income: number; expense: number }> = {}
-    for (const m of movements) {
-      if (!map[m.category]) map[m.category] = { income: 0, expense: 0 }
-      if (m.type === 'income') map[m.category].income += Number(m.amount)
-      else map[m.category].expense += Number(m.amount)
-    }
-    cashByCategory.value = Object.entries(map).map(([category, v]) => ({ category, ...v }))
+    cashByCategory.value = cashRes.data || []
   } catch {
     toast.error('Error al cargar reportes')
   } finally {
     loading.value = false
   }
+}
+
+function fmtFecha(iso?: string) {
+  if (!iso) return ''
+  const [, m, d] = iso.split('-')
+  const meses = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+  return `${parseInt(d)} ${meses[parseInt(m)]}`
 }
 
 function barHeight(val: number) {
@@ -450,7 +449,7 @@ onMounted(() => {
   gap: 2px;
   height: 130px;
 }
-.bar-col { flex: 1; display: flex; align-items: flex-end; cursor: pointer; }
+.bar-col { flex: 1; display: flex; align-items: flex-end; cursor: pointer; height: 100%; }
 .bar-fill {
   width: 100%;
   background: #2563eb;

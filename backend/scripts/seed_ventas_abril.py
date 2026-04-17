@@ -1,7 +1,8 @@
 """
 Script: seed_ventas_abril.py
-Rellena ventas desde la última fecha registrada hasta 2026-04-13
+Rellena ventas desde la última fecha registrada hasta 2026-04-16
 para los tenants magic_world y papeleria.
+También crea/actualiza los CashMovements diarios para el balance de caja.
 
 Uso:
   cd backend
@@ -21,9 +22,9 @@ django.setup()
 
 from django_tenants.utils import schema_context
 
-random.seed(42)
+random.seed(99)
 
-FECHA_FIN = date(2026, 4, 13)
+FECHA_FIN = date(2026, 4, 16)
 METODOS_PAGO = ["efectivo", "efectivo", "efectivo", "tarjeta", "transferencia", "deuna"]
 
 # Semana Santa — ventas muy reducidas
@@ -32,6 +33,7 @@ FERIADOS = {
     date(2026, 4, 11),  # Sábado Santo
     date(2026, 4, 12),  # Domingo de Pascua
 }
+
 
 # ── Reglas de cantidad por rango de precio ─────────────────────────────────
 def cantidad_para_precio(precio: float) -> int:
@@ -55,7 +57,7 @@ def elegir_productos(productos: list, n: int) -> list:
     """
     baratos  = [p for p in productos if float(p["price"]) <  3.0  and p["stock"] > 0]
     medios   = [p for p in productos if 3.0 <= float(p["price"]) <= 15.0 and p["stock"] > 0]
-    caros    = [p for p in productos if float(p["price"]) > 15.0 and p["stock"] > 0]
+    caros    = [p for p in productos if 15.0 < float(p["price"]) <= 50.0 and p["stock"] > 0]
 
     pool = []
     pool += random.choices(baratos, k=min(len(baratos), 6)) if baratos else []
@@ -105,6 +107,7 @@ def seed_tenant(schema_name: str):
     with schema_context(schema_name):
         from apps.modules.inventory.models import Product
         from apps.modules.sales.models import Venta, VentaItem
+        from apps.modules.cash_management.models import CashMovement
 
         productos = list(
             Product.objects.filter(is_active=True, stock__gt=0)
@@ -127,16 +130,27 @@ def seed_tenant(schema_name: str):
         # Mapa local de stock para no releer BD en cada venta
         stock_local = {p["id"]: p["stock"] for p in productos}
 
+        # Acumulado diario para CashMovements
+        ventas_por_dia = {}
+
         fecha = fecha_inicio
         while fecha <= FECHA_FIN:
             dow = fecha.weekday()
             es_fin_semana = dow >= 5
             es_feriado = fecha in FERIADOS
+            monto_dia = Decimal("0.00")
+            caros_usados_hoy = 0  # máx 1 ítem caro (>$15) por día
 
             for _ in range(n_ventas_dia(schema_name, fecha)):
                 n_items = n_items_transaccion()
                 # Filtrar productos con stock disponible localmente
-                disponibles = [p for p in productos if stock_local.get(p["id"], 0) > 0]
+                # Si ya se usó un caro hoy, excluirlos del pool
+                if caros_usados_hoy >= 1:
+                    disponibles = [p for p in productos if stock_local.get(p["id"], 0) > 0 and float(p["price"]) <= 15.0]
+                else:
+                    disponibles = [p for p in productos if stock_local.get(p["id"], 0) > 0]
+                if not disponibles:
+                    disponibles = [p for p in productos if stock_local.get(p["id"], 0) > 0]
                 if not disponibles:
                     break
                 items_elegidos = elegir_productos(disponibles, n_items)
@@ -170,6 +184,8 @@ def seed_tenant(schema_name: str):
                     )
                     subtotal_venta += subtotal
                     stock_local[prod["id"]] = max(0, stock_local[prod["id"]] - qty)
+                    if float(prod["price"]) > 15.0:
+                        caros_usados_hoy += 1
 
                 if subtotal_venta == 0:
                     venta.delete()
@@ -179,6 +195,10 @@ def seed_tenant(schema_name: str):
                 venta.save(update_fields=["total"])
                 total_monto  += subtotal_venta
                 total_ventas += 1
+                monto_dia    += subtotal_venta
+
+            if monto_dia > 0:
+                ventas_por_dia[fecha] = monto_dia
 
             fecha += timedelta(days=1)
 
@@ -186,15 +206,35 @@ def seed_tenant(schema_name: str):
         for pid, stk in stock_local.items():
             Product.objects.filter(id=pid).update(stock=stk)
 
+        # Crear CashMovements diarios
+        cash_creados = 0
+        for fec, monto in ventas_por_dia.items():
+            # Evitar duplicados
+            existe = CashMovement.objects.filter(
+                date=fec,
+                category='sale',
+                type='income',
+            ).exists()
+            if not existe:
+                CashMovement.objects.create(
+                    date=fec,
+                    amount=monto,
+                    type='income',
+                    category='sale',
+                    description=f'Ventas del día {fec.strftime("%d/%m/%Y")}',
+                )
+                cash_creados += 1
+
         dias = (FECHA_FIN - fecha_inicio).days + 1
         print(f"  ✓  {schema_name}: {total_ventas} ventas en {dias} días "
               f"({fecha_inicio} → {FECHA_FIN}) | total: ${total_monto:.2f} "
-              f"| prom/día: ${float(total_monto)/dias:.2f}")
+              f"| prom/día: ${float(total_monto)/dias:.2f} "
+              f"| cash movements: +{cash_creados}")
 
 
 if __name__ == "__main__":
     print("=" * 65)
-    print("  Seed ventas hasta 2026-04-13")
+    print(f"  Seed ventas hasta {FECHA_FIN}")
     print("=" * 65)
     seed_tenant("magic_world")
     seed_tenant("papeleria")
