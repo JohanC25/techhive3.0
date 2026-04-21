@@ -24,7 +24,7 @@ _client = None
 
 _DOMAIN_KEYWORDS_STAFF = {
     'venta', 'ventas', 'vender', 'vendimos', 'vendido', 'vendiste', 'vendi',
-    'compra', 'compras', 'proveedor',
+    'compra', 'compras', 'proveedor', 'proveedores',
     'producto', 'productos', 'articulo', 'articulos', 'item', 'items',
     'inventario', 'stock', 'existencia', 'existencias',
     'caja', 'balance', 'ingreso', 'ingresos', 'egreso', 'egresos',
@@ -34,6 +34,11 @@ _DOMAIN_KEYWORDS_STAFF = {
     'categoria', 'categorias', 'precio', 'precios', 'costo', 'costos',
     'factura', 'cobro', 'pago', 'total', 'tendencia', 'comparar',
     'dashboard', 'reporte', 'informe',
+    # estrategia y gestión comercial
+    'cliente', 'clientes', 'estrategia', 'estrategias', 'consejo', 'consejos',
+    'fidelizar', 'fidelizacion', 'promocion', 'promociones', 'descuento', 'descuentos',
+    'aumentar', 'mejorar', 'crecer', 'crecimiento', 'ganancia', 'ganancias',
+    'negocio', 'comercial', 'rentabilidad', 'margen', 'utilidad',
 }
 
 _DOMAIN_KEYWORDS_CLIENTE = {
@@ -120,20 +125,20 @@ def fallback_staff(texto: str) -> str | None:
         return None
 
     system = (
-        "Eres el asistente comercial de TechHive ERP. "
-        "SOLO puedes responder consultas sobre el negocio: "
-        "ventas, inventario, caja, compras y predicciones de ventas.\n\n"
-        "Puedo responder sobre:\n"
-        "• Ventas del día, semana, mes o período específico\n"
-        "• Productos más vendidos o búsqueda por producto\n"
-        "• Comparación entre períodos (ej: enero vs febrero)\n"
-        "• Tendencias y evolución de ventas\n"
-        "• Balance de caja e ingresos/egresos\n"
-        "• Stock e inventario\n\n"
-        "Si la consulta no es sobre estos temas, indica que no puedes ayudar "
-        "y sugiere una consulta válida del negocio. "
-        "NO respondas temas fuera del dominio comercial. "
-        "Responde en español, máximo 4 líneas. Sé directo y útil."
+        "Eres el asistente comercial inteligente de TechHive ERP, "
+        "un sistema para pequeñas y medianas empresas ecuatorianas.\n\n"
+        "Puedes ayudar con:\n"
+        "• Estrategias comerciales: cómo vender más, temporadas, promociones, precios\n"
+        "• Gestión de inventario: rotación, reabastecimiento, stock mínimo\n"
+        "• Análisis de negocio: tendencias, estacionalidad, indicadores clave\n"
+        "• Mejores prácticas para PyMES: atención al cliente, fidelización\n"
+        "• Cualquier consulta operativa del negocio\n\n"
+        "Contexto: el usuario es dueño o empleado de una tienda pequeña en Ecuador. "
+        "Responde con consejos prácticos y concretos, adaptados a su realidad. "
+        "Si te preguntan sobre estrategias estacionales (diciembre, feriados, etc.), "
+        "da recomendaciones útiles para comercio minorista ecuatoriano. "
+        "NO respondas sobre temas completamente ajenos al negocio (política, deportes, etc.). "
+        "Responde en español, máximo 5 líneas. Sé directo, práctico y motivador."
     )
 
     try:

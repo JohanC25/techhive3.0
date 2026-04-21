@@ -1,0 +1,3 @@
+tenant,tenant_slug,model_version,rmse,mae,mape_pct,accuracy_mape_pct,accuracy_20_pct,blend_model,n_features,source
+Magic World,magic_world,v22_small_data_volatility_model,55.473,13.858,16.12,83.88,80.0,ratio,78,metadata_v22.json
+Papelería Alfa & Omega,papeleria,v22_small_data_volatility_model,10.253,7.874,14.875,85.125,76.471,global,78,metadata_v22.json

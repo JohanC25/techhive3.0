@@ -104,6 +104,47 @@ def ventas_por_dia(request):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
+def cash_por_categoria(request):
+    """
+    GET /api/reports/cash-por-categoria/?fecha_inicio=&fecha_fin=
+    Movimientos de caja agrupados por categoría (ingresos y egresos).
+    """
+    hoy = date.today()
+    fecha_inicio = request.query_params.get('fecha_inicio', hoy.replace(day=1).isoformat())
+    fecha_fin = request.query_params.get('fecha_fin', hoy.isoformat())
+
+    try:
+        from apps.modules.cash_management.models import CashMovement
+        from django.db.models import Q
+        from decimal import Decimal
+
+        qs = CashMovement.objects.filter(date__range=[fecha_inicio, fecha_fin])
+
+        # Aggregate per (category, type) in one query
+        rows = (
+            qs.values('category', 'type')
+            .annotate(total=Sum('amount'))
+        )
+
+        # Build result map
+        cat_map: dict = {}
+        for row in rows:
+            cat = row['category']
+            if cat not in cat_map:
+                cat_map[cat] = {'category': cat, 'income': Decimal('0'), 'expense': Decimal('0')}
+            if row['type'] == 'income':
+                cat_map[cat]['income'] += row['total'] or Decimal('0')
+            else:
+                cat_map[cat]['expense'] += row['total'] or Decimal('0')
+
+        result = sorted(cat_map.values(), key=lambda x: x['income'] + x['expense'], reverse=True)
+        return Response(result)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
 def compras_resumen(request):
     """
     GET /api/reports/compras/?fecha_inicio=&fecha_fin=

@@ -141,8 +141,8 @@ INTENT_PATTERNS = {
     r'ventas de (?!enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|hoy|ayer|esta|esta|este|la|el)[a-z]+',
     ],
     'ventas_por_periodo': [
-        r'\b(semana|mes|ano|enero|febrero|marzo|abril|mayo|junio|julio|agosto|'
-        r'septiembre|octubre|noviembre|diciembre)\b',
+        # Requiere contexto de ventas + período (evita falsos positivos como "vender más en diciembre")
+        r'ventas?\s+(?:de\s+(?:la\s+|el\s+)?|del?\s+)?\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre|semana|mes|ano)\b',
         r'ultimos \d+ dias',
         r'hace \d+ dias',
         r'cuanto.*vendimos',
@@ -365,9 +365,17 @@ def detectar_intencion(texto: str) -> dict:
     if intent_detectado == 'comparar_periodos':
         rangos_comparacion = extraer_dos_rangos(texto)
 
+    # Fallback a ventas_por_periodo solo si hay fecha Y hay indicador real de consulta de ventas.
+    # Evita que preguntas de estrategia como "vender más en diciembre" caigan aquí.
+    _INDICADORES_CONSULTA = [
+        'vendimos', 'vendiste', 'vendio', 'vendieron',
+        'cuanto', 'facturamos', 'total de venta', 'resumen de venta',
+        'ultimos', 'hace \d',
+    ]
     if intent_detectado == 'desconocido' and fechas['fecha_inicio']:
-        intent_detectado = 'ventas_por_periodo'
-        confianza = 'media'
+        if any(re.search(ind, texto_normalizado) for ind in _INDICADORES_CONSULTA):
+            intent_detectado = 'ventas_por_periodo'
+            confianza = 'media'
 
     return {
         'intent': intent_detectado,

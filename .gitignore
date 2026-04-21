@@ -40,3 +40,9 @@ Thumbs.db
 
 # OS
 *.swp
+
+
+# Archivos de evaluación académica
+BACKEND_PARTE1.txt
+BACKEND_PARTE2.txt
+FRONTEND.txt

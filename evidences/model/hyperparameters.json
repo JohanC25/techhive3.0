@@ -1,0 +1,74 @@
+{
+  "model_version": "v22_small_data_volatility_model",
+  "framework": "CatBoostRegressor",
+  "catboost_version": ">=1.2",
+  "training_date": "2025-Q4",
+
+  "base_hyperparameters": {
+    "depth": 4,
+    "l2_leaf_reg": 10,
+    "iterations": 1800,
+    "learning_rate": 0.01,
+    "loss_function": "RMSE",
+    "random_seed": 42,
+    "verbose": false
+  },
+
+  "ensemble": {
+    "strategy": "weighted_blend",
+    "models": ["direct", "ratio", "global"],
+    "n_models_per_tenant": 3,
+    "total_pkl_files": 5,
+    "files": [
+      "magic_direct_v22.pkl",
+      "magic_ratio_v22.pkl",
+      "pap_direct_v22.pkl",
+      "pap_ratio_v22.pkl",
+      "global_model_v22.pkl"
+    ]
+  },
+
+  "blend_weights": {
+    "magic_world": {
+      "pred_direct": 0.0,
+      "pred_ratio": 1.0,
+      "pred_global": 0.0,
+      "winning_model": "ratio"
+    },
+    "papeleria": {
+      "pred_direct": 0.0,
+      "pred_ratio": 0.0,
+      "pred_global": 1.0,
+      "winning_model": "global"
+    }
+  },
+
+  "calibration": {
+    "method": "segment_multiplier",
+    "segments": "is_weekend × is_holiday (4 combinations)",
+    "magic_world": {
+      "global_mult": 1.0749917347374947,
+      "seg_mult": {
+        "weekday_non_holiday (0_0)": 1.0699846840551774,
+        "weekend_non_holiday (1_0)": 1.08
+      }
+    },
+    "papeleria": {
+      "global_mult": 0.9125507854209705,
+      "seg_mult": {
+        "weekday_non_holiday (0_0)": 0.9401135404525471,
+        "weekday_holiday (0_1)": 0.9251277027922070,
+        "weekend_non_holiday (1_0)": 0.92,
+        "weekend_holiday (1_1)": 0.92
+      }
+    }
+  },
+
+  "training_space": {
+    "target": "ventas (log-transformed: log1p)",
+    "prediction_space": "log-space (expm1 to inverse-transform)",
+    "n_features": 78
+  },
+
+  "notes": "Source: metadata_v22.json + notebooks/ModeloPrediccionVentasFinalDjango.ipynb"
+}
