@@ -100,15 +100,21 @@ def extraer_nombre_producto_cliente(texto: str) -> str | None:
         match = re.search(patron, texto_n)
         if match:
             nombre = match.group(1).strip()
-            # Limpiar artículos y palabras sobrantes al final
-            nombre = re.sub(
-                r'\b(en stock|disponible|ahora|por favor|porfavor|gracias|'
-                r'hoy|disponibles|please)\s*$',
-                '', nombre
-            ).strip()
+            # Eliminar frases de ruido (en cualquier posición)
+            noise = [
+                r'\ben stock\b', r'\bdisponibles?\b', r'\ben existencia\b',
+                r'\bpor favor\b', r'\bporfavor\b', r'\bgracias\b', r'\bplease\b',
+                r'\bahora\b', r'\bhoy\b',
+            ]
+            for n in noise:
+                nombre = re.sub(n, '', nombre)
             nombre = re.sub(r'\s+', ' ', nombre).strip()
-            nombre = re.sub(r'[?!.,;:"\']+$', '', nombre).strip()       # puntuación final
-            nombre = re.sub(r'^(dentro de|en la|en el|de la|del|de los|de las|en)\s+', '', nombre).strip()  # prefijos basura
+            nombre = re.sub(r'[?!.,;:"\']+$', '', nombre).strip()
+            nombre = re.sub(r'^(dentro de|en la|en el|de la|del|de los|de las|en)\s+', '', nombre).strip()
+            # Quitar "productos de" al inicio (buscar_catalogo)
+            nombre = re.sub(r'^productos? de\s+', '', nombre).strip()
+            nombre = re.sub(r'^articulos? de\s+', '', nombre).strip()
+            nombre = re.sub(r'^catalogo de\s+', '', nombre).strip()
             if len(nombre) > 2:
                 return nombre
     return None

@@ -22,9 +22,9 @@ django.setup()
 
 from django_tenants.utils import schema_context
 
-random.seed(99)
+random.seed(11)
 
-FECHA_FIN = date(2026, 4, 16)
+FECHA_FIN = date(2026, 4, 23)
 METODOS_PAGO = ["efectivo", "efectivo", "efectivo", "tarjeta", "transferencia", "deuna"]
 
 # Semana Santa — ventas muy reducidas
@@ -234,7 +234,7 @@ def seed_tenant(schema_name: str):
 
 if __name__ == "__main__":
     print("=" * 65)
-    print(f"  Seed ventas hasta {FECHA_FIN}")
+    print(f"  Seed ventas hasta {FECHA_FIN} (Apr 17-20)")
     print("=" * 65)
     seed_tenant("magic_world")
     seed_tenant("papeleria")
