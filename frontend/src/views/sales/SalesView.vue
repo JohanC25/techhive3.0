@@ -144,6 +144,8 @@
               <div class="items-header">
                 <span class="items-title">Productos / Servicios</span>
                 <button type="button" class="btn-add-item" @click="addItem">+ Agregar ítem</button>
+                <button type="button" class="btn-add-item" @click="scanner?.openScanner()">Escanear productos</button>
+                <BarcodeScanner ref="scanner" @scan="onScan" />
               </div>
 
               <div v-if="form.items.length === 0" class="items-empty">
@@ -234,6 +236,8 @@ import { ref, computed, onMounted } from 'vue'
 import api from '@/services/api'
 import { useToastStore } from '@/stores/toast'
 
+import BarcodeScanner from './BarcodeScanner.vue'
+
 const toast = useToastStore()
 
 interface VentaItem {
@@ -268,6 +272,7 @@ interface Product {
   id: number
   name: string
   price: number
+  barcode: string
 }
 
 const items = ref<Venta[]>([])
@@ -282,6 +287,7 @@ const showConfirm = ref(false)
 const editingItem = ref<Venta | null>(null)
 const deletingItem = ref<Venta | null>(null)
 const formError = ref('')
+const scanner = ref<InstanceType<typeof BarcodeScanner> | null>(null)
 
 const summary = ref({ total: 0, transacciones: 0, promedio: 0 })
 const filters = ref({ fecha_inicio: '', fecha_fin: '', metodo_pago: '' })
@@ -329,11 +335,13 @@ function removeItem(idx: number) {
 
 function calcSubtotal(idx: number) {
   const it = form.value.items[idx]
+  if (!it) return
   it.subtotal = (it.quantity || 0) * (it.unit_price || 0)
 }
 
 function onProductSelect(idx: number) {
   const it = form.value.items[idx]
+  if (!it) return
   const prod = products.value.find(p => p.id === it.product)
   if (prod) {
     it.description = prod.name
@@ -465,6 +473,30 @@ async function deleteItem() {
     saving.value = false
   }
 }
+
+function onScan(code: string) {
+  const prod = products.value.find(p => p.barcode === code)
+
+  if (!prod) return
+
+  const existing = form.value.items.find(it => it.product === prod.id)
+
+  if (existing) {
+    existing.quantity++
+    existing.subtotal = existing.quantity * existing.unit_price
+  } else {
+    form.value.items.push({
+      product: prod.id,
+      description: prod.name,
+      quantity: 1,
+      unit_price: prod.price,
+      subtotal: prod.price
+    })
+  }
+}
+
+filters.value.fecha_inicio = new Date().toLocaleDateString('en-CA');
+filters.value.fecha_fin = new Date().toLocaleDateString('en-CA');
 
 onMounted(() => {
   loadData()

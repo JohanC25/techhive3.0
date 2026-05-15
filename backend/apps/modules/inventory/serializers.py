@@ -25,7 +25,7 @@ class ProductSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'category', 'category_name', 'shelf', 'shelf_name',
             'name', 'sku', 'description',
-            'price', 'cost', 'stock', 'stock_min', 'low_stock', 'is_active',
+            'price', 'barcode', 'cost', 'stock', 'stock_min', 'low_stock', 'is_active',
             'created_at', 'updated_at',
         ]
         read_only_fields = ['created_at', 'updated_at']

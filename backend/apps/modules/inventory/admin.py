@@ -10,7 +10,7 @@ class CategoryAdmin(admin.ModelAdmin):
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ['name', 'sku', 'category', 'price', 'stock', 'stock_min', 'is_active']
+    list_display = ['name', 'sku', 'category', 'price', 'barcode', 'stock', 'stock_min', 'is_active']
     list_filter = ['is_active', 'category']
     search_fields = ['name', 'sku']
     list_editable = ['stock', 'is_active']

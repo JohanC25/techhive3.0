@@ -323,6 +323,8 @@ async function deleteItem() {
   try { await api.delete(`/cash/movements/${deletingItem.value.id}/`); toast.success('Movimiento eliminado'); showConfirm.value = false; loadData(currentPage.value) }
   catch { toast.error('Error al eliminar') } finally { saving.value = false }
 }
+filters.value.fecha_inicio = new Date().toLocaleDateString('en-CA');
+filters.value.fecha_fin = new Date().toLocaleDateString('en-CA');
 
 onMounted(() => { checkSession(); loadData() })
 </script>

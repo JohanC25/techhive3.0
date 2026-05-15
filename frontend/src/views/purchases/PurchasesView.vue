@@ -310,6 +310,8 @@ async function deleteItem() {
   try { await api.delete(url); toast.success('Eliminado'); showConfirm.value = false; activeTab.value === 'suppliers' ? loadSuppliers() : loadData(currentPage.value) }
   catch { toast.error('Error al eliminar') } finally { saving.value = false }
 }
+filters.value.fecha_inicio = new Date().toLocaleDateString('en-CA');
+filters.value.fecha_fin = new Date().toLocaleDateString('en-CA');
 
 onMounted(async () => { await loadSuppliers(); loadData() })
 </script>
