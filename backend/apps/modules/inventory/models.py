@@ -42,6 +42,7 @@ class Product(models.Model):
     sku = models.CharField(max_length=100, unique=True, blank=True)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, verbose_name='Precio de venta')
+    barcode = models.CharField(max_length=50, unique=True, blank=True, null=True, verbose_name="Código de barras" )
     cost = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True, verbose_name='Costo')
     stock = models.PositiveIntegerField(default=0)
     stock_min = models.PositiveIntegerField(default=0, verbose_name='Stock mínimo')

@@ -31,6 +31,17 @@
     <template v-if="activeTab === 'products'">
       <div class="filters-bar">
         <input v-model="search" @input="debouncedLoad" type="search" placeholder="Buscar producto, SKU..." class="filter-input filter-search" />
+        <button @click="startScan" class="btn btn-secondary">
+          📷 Escanear
+        </button>
+        <BarcodeScannerModal 
+          :modelValue="scanning"
+          @cancel="cancelScan"
+        />
+        <select v-model="filters.shelf" @change="() => loadData(1)" class="filter-select">
+          <option value="">Todas las perchas</option>
+          <option v-for="s in shelves" :key="s.id" :value="s.id">{{ s.name }}</option>
+        </select>
         <select v-model="filters.category" @change="() => loadData(1)" class="filter-select">
           <option value="">Todas las categorías</option>
           <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
@@ -40,7 +51,7 @@
           <option value="true">Activos</option>
           <option value="false">Inactivos</option>
         </select>
-        <button v-if="search || filters.category || filters.is_active" @click="clearFilters" class="btn-clear">Limpiar</button>
+        <button v-if="search || filters.category || filters.is_active || filters.shelf" @click="clearFilters" class="btn-clear">Limpiar</button>
       </div>
 
       <div class="table-card">
@@ -51,6 +62,7 @@
               <th>Producto</th>
               <th>SKU</th>
               <th>Categoría</th>
+              <th>Percha</th>
               <th class="text-right">Precio</th>
               <th class="text-right">Costo</th>
               <th class="text-center">Stock</th>
@@ -66,6 +78,7 @@
               </td>
               <td class="font-mono">{{ item.sku || '—' }}</td>
               <td>{{ item.category_name || '—' }}</td>
+              <td>{{ item.shelf_name || '—' }}</td>
               <td class="text-right">{{ fmt(item.price) }}</td>
               <td class="text-right">{{ item.cost ? fmt(item.cost) : '—' }}</td>
               <td class="text-center">
@@ -120,7 +133,6 @@
             <tr>
               <th>Nombre</th>
               <th>Descripción</th>
-              <th class="text-center">Productos</th>
               <th class="text-center">Acciones</th>
             </tr>
           </thead>
@@ -128,7 +140,6 @@
             <tr v-for="cat in categories" :key="cat.id">
               <td style="font-weight:600">{{ cat.name }}</td>
               <td>{{ cat.description || '—' }}</td>
-              <td class="text-center">{{ cat.products?.length ?? '—' }}</td>
               <td class="text-center">
                 <div class="row-actions">
                   <button class="btn-icon btn-edit" @click="openEditCat(cat)">
@@ -242,6 +253,10 @@
               </select>
             </div>
             <div class="form-group">
+              <label class="form-label">Código de barras *</label>
+              <input v-model="prodForm.barcode" type="text" class="form-input" required />
+            </div>
+            <div class="form-group">
               <label class="form-label">Percha</label>
               <select v-model="prodForm.shelf" class="form-input">
                 <option :value="null">Sin percha</option>
@@ -330,13 +345,14 @@
 import { ref, computed, onMounted } from 'vue'
 import api from '@/services/api'
 import { useToastStore } from '@/stores/toast'
+import BarcodeScanner from "./BarcodeScanner.vue"
 
 const toast = useToastStore()
 const activeTab = ref<'products' | 'categories' | 'shelves'>('products')
 
 interface Product {
   id: number; name: string; sku: string; category: number | null; category_name: string
-  description: string; price: number; cost: number | null; stock: number; stock_min: number
+  description: string; price: number; barcode: string, cost: number | null; stock: number; stock_min: number
   is_active: boolean; low_stock: boolean; shelf: number | null; shelf_name: string
 }
 interface Category { id: number; name: string; description: string }
@@ -347,7 +363,8 @@ const categories = ref<Category[]>([])
 const count = ref(0); const nextUrl = ref<string | null>(null); const prevUrl = ref<string | null>(null)
 const currentPage = ref(1); const totalProducts = ref(0)
 const tableLoading = ref(false); const catLoading = ref(false); const saving = ref(false)
-const search = ref(''); const filters = ref({ category: '', is_active: '' })
+const search = ref(''); const filters = ref({ category: '', is_active: '', shelf: ''})
+const scanning = ref(false);
 const shelves = ref<Shelf[]>([])
 const showShelfModal = ref(false)
 const editShelfTarget = ref<Shelf | null>(null)
@@ -358,7 +375,7 @@ const showModal = ref(false); const showConfirm = ref(false)
 const editingItem = ref<Product | Category | null>(null)
 const deletingItem = ref<any>(null); const formError = ref('')
 
-const emptyProd = () => ({ name: '', sku: '', category: null as number | null, shelf: null as number | null, description: '', price: 0, cost: null as number | null, stock: 0, stock_min: 0, is_active: true })
+const emptyProd = () => ({ name: '', sku: '', category: null as number | null, barcode: '', shelf: null as number | null, description: '', price: 0, cost: null as number | null, stock: 0, stock_min: 0, is_active: true })
 const emptyCat = () => ({ name: '', description: '' })
 const prodForm = ref(emptyProd())
 const catForm = ref(emptyCat())
@@ -371,12 +388,18 @@ const paginationText = computed(() => {
 let debounceTimer: ReturnType<typeof setTimeout>
 function debouncedLoad() { clearTimeout(debounceTimer); debounceTimer = setTimeout(() => loadData(), 400) }
 
+components: {
+  BarcodeScanner
+}
+
+
 async function loadData(page = 1) {
   tableLoading.value = true; currentPage.value = page
   const p = new URLSearchParams()
   if (search.value) p.set('search', search.value)
   if (filters.value.category) p.set('category', filters.value.category)
   if (filters.value.is_active) p.set('is_active', filters.value.is_active)
+  if (filters.value.shelf) p.set('shelf', filters.value.shelf)
   p.set('page', String(page))
   try {
     const res = await api.get(`/inventory/products/?${p}`)
@@ -393,7 +416,7 @@ async function loadCategories() {
 
 function goPage(p: number) { loadData(p) }
 function fmt(v: number) { return `$${Number(v || 0).toLocaleString('es-EC', { minimumFractionDigits: 2 })}` }
-function clearFilters() { search.value = ''; filters.value = { category: '', is_active: '' }; loadData() }
+function clearFilters() { search.value = ''; filters.value = { category: '', is_active: '', shelf: ''}; loadData() }
 
 function openCreate() {
   editingItem.value = null; formError.value = ''
@@ -478,7 +501,26 @@ async function deleteShelf(s: Shelf) {
   shelves.value = shelves.value.filter(x => x.id !== s.id)
 }
 
-onMounted(async () => { await loadCategories(); loadShelves(); loadData() })
+function startScan() {
+  scanning.value = true;
+  search.value = "";
+
+  setTimeout(() => {
+    const input = document.querySelector("input[type='search']") as HTMLInputElement | null;
+    input?.focus();
+  }, 0);
+}
+
+function cancelScan() {
+  scanning.value = false;
+}
+
+onMounted(
+  async () => { 
+    await loadCategories(); 
+    loadShelves(); 
+    loadData() 
+  })
 </script>
 
 <style scoped>
