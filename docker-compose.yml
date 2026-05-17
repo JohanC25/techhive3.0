@@ -1,4 +1,4 @@
-version: "3.9"
+version:
 
 services:
   db:
@@ -53,7 +53,7 @@ services:
       - "443:443"
 
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
 
     depends_on:
       - frontend
