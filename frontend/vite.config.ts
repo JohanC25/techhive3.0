@@ -16,15 +16,18 @@ export default defineConfig({
   server: {
     // Escucha en todas las interfaces para soportar subdominios (demo.localhost, admin.localhost)
     host: true,
+    allowedHosts: [
+      'admin.techhive-ec.com',
+    ],
     proxy: {
       '/api': {
-        target: 'http://127.0.0.1:8000',
+        target: 'http://techhive_backend:8000',
         changeOrigin: false,
         ws: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
             // Reenvía el host real del browser, reemplazando el puerto de Vite con el de Django
-            const incomingHost = req.headers['host'] || 'localhost:5173'
+            const incomingHost = req.headers['host'] || 'techhive_frontend:5173'
             const backendHost = incomingHost.replace(/:\d+$/, ':8000')
             proxyReq.setHeader('Host', backendHost)
           })
