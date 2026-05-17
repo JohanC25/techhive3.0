@@ -168,3 +168,11 @@ PUBLIC_SCHEMA_NAME = "public"
 
 # Admin portal master key
 ADMIN_MASTER_KEY = os.getenv("ADMIN_MASTER_KEY", "change-me-in-production")
+
+##ALLOWED_HOSTS = [
+## "techhive-ec.com",
+## "www.techhive-ec.com",
+## "admin.techhive-ec.com",
+##]
+
+ALLOWED_HOSTS = ["admin.techhive-ec.com"]

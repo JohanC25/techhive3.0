@@ -17,7 +17,7 @@ export default defineConfig({
     // Escucha en todas las interfaces para soportar subdominios (demo.localhost, admin.localhost)
     host: true,
     allowedHosts: [
-      'admin.techhive-ec.com',
+      '.techhive-ec.com'
     ],
     proxy: {
       '/api': {
