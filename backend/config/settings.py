@@ -175,4 +175,6 @@ ADMIN_MASTER_KEY = os.getenv("ADMIN_MASTER_KEY", "change-me-in-production")
 ## "admin.techhive-ec.com",
 ##]
 
-ALLOWED_HOSTS = ["admin.techhive-ec.com"]
+ALLOWED_HOSTS = [
+    '.techhive-ec.com',
+]

@@ -22,7 +22,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: 'http://techhive_backend:8000',
-        changeOrigin: false,
+        changeOrigin: true,
         ws: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq, req) => {
