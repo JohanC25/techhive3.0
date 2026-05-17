@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand
 
 
 class Command(BaseCommand):
-    help = "Crea el tenant público y registra admin.localhost."
+    help = "Crea el tenant público y registra admin.techhive-ec.com"
 
     def handle(self, *args, **options):
         from apps.tenants.models import Company, Domain
@@ -22,12 +22,12 @@ class Command(BaseCommand):
             self.stdout.write("  [=] Tenant público ya existía")
 
         dom, created = Domain.objects.get_or_create(
-            domain='admin.localhost',
+            domain='admin.techhive-ec.com',
             defaults={'tenant': pub, 'is_primary': True},
         )
         if created:
-            self.stdout.write("  [+] Dominio admin.localhost creado")
+            self.stdout.write("  [+] Dominio admin.techhive-ec.com creado")
         else:
-            self.stdout.write("  [=] Dominio admin.localhost ya existía")
+            self.stdout.write("  [=] Dominio admin.techhive-ec.com ya existía")
 
-        self.stdout.write(self.style.SUCCESS("\nListo. Ahora admin.localhost sirve el portal admin."))
+        self.stdout.write(self.style.SUCCESS("\nListo. Ahora admin.v.com sirve el portal admin."))
