@@ -30,4 +30,4 @@ class Command(BaseCommand):
         else:
             self.stdout.write("  [=] Dominio admin.techhive-ec.com ya existía")
 
-        self.stdout.write(self.style.SUCCESS("\nListo. Ahora admin.v.com sirve el portal admin."))
+        self.stdout.write(self.style.SUCCESS("\nListo. Ahora admin.techhive-ec.com sirve el portal admin."))
