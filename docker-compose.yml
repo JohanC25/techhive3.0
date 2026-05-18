@@ -28,6 +28,10 @@ services:
       DB_HOST: db
       DB_PORT: 5432
 
+      DJANGO_ALLOWED_HOSTS: .techhive-ec.com,localhost,127.0.0.1
+
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://*.techhive-ec.com,http://localhost
+
     expose:
       - "8000"
 
@@ -52,7 +56,7 @@ services:
       - -c
       - |
         cat > /etc/caddy/Caddyfile <<'EOF'
-        admin.techhive-ec.com {
+        techhive-ec.com, *.techhive-ec.com {
             encode gzip
 
             handle_path /api/* {
