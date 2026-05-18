@@ -180,9 +180,11 @@ ALLOWED_HOSTS = os.getenv(
     ".techhive-ec.com,localhost,127.0.0.1"
 ).split(",")
 
-CSRF_TRUSTED_ORIGINS = os.getenv(
-    "DJANGO_CSRF_TRUSTED_ORIGINS",
-    "https://*.techhive-ec.com,http://localhost"
-).split(",")
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.techhive-ec.com",
+    "http://*.techhive-ec.com",
+    "http://localhost",
+    "http://127.0.0.1",
+]
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
