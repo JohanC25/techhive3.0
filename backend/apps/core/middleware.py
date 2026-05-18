@@ -23,7 +23,7 @@ class ModuleAccessMiddleware:
 
         module_code = resolver.namespace
         # Namespaces excluidos del control de acceso
-        EXCLUDED = {"users", "chatbot"}
+        EXCLUDED = {"users", "chatbot", "admin"}
         if module_code in EXCLUDED:
             return None
 
