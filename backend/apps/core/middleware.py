@@ -16,6 +16,9 @@ class ModuleAccessMiddleware:
     def process_view(self, request, view_func, view_args, view_kwargs):
         if not (hasattr(request, "tenant") and request.tenant):
             return None
+        
+        if request.tenant.schema_name == 'public':
+            return None
 
         resolver = getattr(request, "resolver_match", None)
         if not resolver or not resolver.namespace:
@@ -23,7 +26,7 @@ class ModuleAccessMiddleware:
 
         module_code = resolver.namespace
         # Namespaces excluidos del control de acceso
-        EXCLUDED = {"users", "chatbot"}
+        EXCLUDED = {"users", "chatbot", "admin"}
         if module_code in EXCLUDED:
             return None
 
