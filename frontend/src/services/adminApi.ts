@@ -3,6 +3,10 @@ import axios from 'axios'
 const adminApi = axios.create({
   baseURL: '/api/admin',
   timeout: 15000,
+
+  withCredentials: true,
+  xsrfCookieName: 'csrftoken',
+  xsrfHeaderName: 'X-CSRFToken',
 })
 
 adminApi.interceptors.request.use((config) => {
