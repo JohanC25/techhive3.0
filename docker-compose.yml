@@ -56,7 +56,7 @@ services:
       - -c
       - |
         cat > /etc/caddy/Caddyfile <<'EOF'
-        admin.techhive-ec.com {
+        http://admin.techhive-ec.com {
             encode gzip
 
             handle_path /api/* {
