@@ -175,16 +175,13 @@ ADMIN_MASTER_KEY = os.getenv("ADMIN_MASTER_KEY", "change-me-in-production")
 ## "admin.techhive-ec.com",
 ##]
 
-ALLOWED_HOSTS = os.getenv(
-    "DJANGO_ALLOWED_HOSTS",
-    ".techhive-ec.com,localhost,127.0.0.1"
-).split(",")
+ALLOWED_HOSTS = [".techhive-ec.com", "localhost", "127.0.0.1"]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://*.techhive-ec.com",
-    "http://*.techhive-ec.com",
-    "http://localhost",
-    "http://127.0.0.1",
+ "https://admin.techhive-ec.com",
+ "https://*.techhive-ec.com",
 ]
 
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = True
