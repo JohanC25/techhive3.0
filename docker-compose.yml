@@ -38,14 +38,16 @@ services:
     labels:
       - traefik.enable=true
 
-      - traefik.http.routers.techhive-api.rule=Host(`*.techhive-ec.com`) && PathPrefix(`/api`)
+      # MUY IMPORTANTE
+      - traefik.docker.network=traefik-proxy
+
+      # API
+      - traefik.http.routers.techhive-api.rule=Host(`admin.techhive-ec.com`) && PathPrefix(`/api`)
 
       - traefik.http.routers.techhive-api.entrypoints=websecure
+
       - traefik.http.routers.techhive-api.tls=true
       - traefik.http.routers.techhive-api.tls.certresolver=letsencrypt
-
-      - traefik.http.routers.techhive-api.tls.domains[0].main=techhive-ec.com
-      - traefik.http.routers.techhive-api.tls.domains[0].sans=*.techhive-ec.com
 
       - traefik.http.services.techhive-api.loadbalancer.server.port=8000
 
@@ -66,15 +68,16 @@ services:
     labels:
       - traefik.enable=true
 
-      - traefik.http.routers.techhive-web.rule=Host(`techhive-ec.com`) || Host(`*.techhive-ec.com`)
+      # MUY IMPORTANTE
+      - traefik.docker.network=traefik-proxy
+
+      # FRONTEND
+      - traefik.http.routers.techhive-web.rule=Host(`admin.techhive-ec.com`)
 
       - traefik.http.routers.techhive-web.entrypoints=websecure
+
       - traefik.http.routers.techhive-web.tls=true
       - traefik.http.routers.techhive-web.tls.certresolver=letsencrypt
-
-      # wildcard domains
-      - traefik.http.routers.techhive-web.tls.domains[0].main=techhive-ec.com
-      - traefik.http.routers.techhive-web.tls.domains[0].sans=*.techhive-ec.com
 
       - traefik.http.services.techhive-web.loadbalancer.server.port=5173
 
