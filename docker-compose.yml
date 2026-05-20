@@ -30,10 +30,24 @@ services:
 
       DJANGO_ALLOWED_HOSTS: .techhive-ec.com,localhost,127.0.0.1
 
-      DJANGO_CSRF_TRUSTED_ORIGINS: https://*.techhive-ec.com,http://localhost
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://admin.techhive-ec.com,http://localhost
 
     expose:
       - "8000"
+
+    labels:
+      - traefik.enable=true
+
+      # API
+      - traefik.http.routers.techhive-api.rule=Host(`admin.techhive-ec.com`) && PathPrefix(`/api`)
+      - traefik.http.routers.techhive-api.entrypoints=websecure
+      - traefik.http.routers.techhive-api.tls.certresolver=letsencrypt
+
+      - traefik.http.services.techhive-api.loadbalancer.server.port=8000
+
+    networks:
+      - traefik-proxy
+      - default
 
   frontend:
     build: ./frontend
@@ -45,39 +59,23 @@ services:
     expose:
       - "5173"
 
-  proxy:
-    image: caddy:2
-    container_name: techhive_proxy
-    restart: always
+    labels:
+      - traefik.enable=true
 
-    entrypoint: sh
+      # Frontend
+      - traefik.http.routers.techhive-web.rule=Host(`admin.techhive-ec.com`)
+      - traefik.http.routers.techhive-web.entrypoints=websecure
+      - traefik.http.routers.techhive-web.tls.certresolver=letsencrypt
 
-    command:
-      - -c
-      - |
-        cat > /etc/caddy/Caddyfile <<'EOF'
-        admin.techhive-ec.com {
-            encode gzip
+      - traefik.http.services.techhive-web.loadbalancer.server.port=5173
 
-            handle_path /api/* {
-                reverse_proxy backend:8000
-            }
-
-            handle {
-                reverse_proxy frontend:5173
-            }
-        }
-        EOF
-
-        caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
-
-    ports:
-      - "80:80"
-      - "443:443"
-
-    depends_on:
-      - frontend
-      - backend
+    networks:
+      - traefik-proxy
+      - default
 
 volumes:
   postgres_data:
+
+networks:
+  traefik-proxy:
+    external: true
