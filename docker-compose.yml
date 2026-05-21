@@ -30,7 +30,7 @@ services:
 
       DJANGO_ALLOWED_HOSTS: .techhive-ec.com,localhost,127.0.0.1
 
-      DJANGO_CSRF_TRUSTED_ORIGINS: https://admin.techhive-ec.com,http://localhost
+      DJANGO_CSRF_TRUSTED_ORIGINS: https://*.techhive-ec.com,http://localhost
 
       SECRET_KEY: ${SECRET_KEY}
       ADMIN_MASTER_KEY: ${ADMIN_MASTER_KEY}
@@ -45,7 +45,7 @@ services:
       - traefik.docker.network=traefik-proxy
 
       # API
-      - traefik.http.routers.techhive-api.rule=Host(`admin.techhive-ec.com`) && PathPrefix(`/api`)
+      - traefik.http.routers.techhive-api.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.techhive-ec.com`) && PathPrefix(`/api`)
 
       - traefik.http.routers.techhive-api.entrypoints=websecure
 
@@ -75,7 +75,7 @@ services:
       - traefik.docker.network=traefik-proxy
 
       # FRONTEND
-      - traefik.http.routers.techhive-web.rule=Host(`admin.techhive-ec.com`)
+      - traefik.http.routers.techhive-web.rule=HostRegexp(`{subdomain:[a-z0-9-]+}.techhive-ec.com`)
 
       - traefik.http.routers.techhive-web.entrypoints=websecure
 
