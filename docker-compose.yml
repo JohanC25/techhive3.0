@@ -32,7 +32,7 @@ services:
 
       DJANGO_CSRF_TRUSTED_ORIGINS: https://admin.techhive-ec.com,http://localhost
 
-      SECRET_KEY: ${DJANGO_SECRET_KEY}
+      SECRET_KEY: ${SECRET_KEY}
       ADMIN_MASTER_KEY: ${ADMIN_MASTER_KEY}
 
     expose:
