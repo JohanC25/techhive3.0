@@ -45,8 +45,7 @@ services:
       - traefik.docker.network=traefik-proxy
 
       # API
-      - traefik.http.routers.techhive.rule=Host(`techhive-ec.com`) || Host(`admin.techhive-ec.com`) || Host(`magicworldcomputers.techhive-ec.com`) || Host(`papeleriaalfaomega.techhive-ec.com`) && PathPrefix(`/api`)
-      
+      - traefik.http.routers.techhive-api.rule=Host(`api.techhive-ec.com`)
 
       - traefik.http.routers.techhive-api.entrypoints=websecure
 
@@ -76,7 +75,7 @@ services:
       - traefik.docker.network=traefik-proxy
 
       # FRONTEND
-      - traefik.http.routers.techhive.rule=Host(`techhive-ec.com`) || Host(`admin.techhive-ec.com`) || Host(`magicworldcomputers.techhive-ec.com`) || Host(`papeleriaalfaomega.techhive-ec.com`) || Host(`techhive-ec.com`)
+      - traefik.http.routers.techhive-web.rule=Host(`techhive-ec.com`) || Host(`admin.techhive-ec.com`) || Host(`magicworldcomputers.techhive-ec.com`) || Host(`papeleriaalfaomega.techhive-ec.com`)
 
       - traefik.http.routers.techhive-web.entrypoints=websecure
 
