@@ -249,3 +249,49 @@
 }
 .tab-btn:hover { color: #374151; }
 .tab-btn.active { color: #2563eb; border-bottom-color: #2563eb; }
+
+/* ===== Element Plus Select ===== */
+
+.form-input.el-select {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.form-input .el-select__wrapper {
+  padding: 10px 12px;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e293b;
+  background: #f8fafc;
+
+  min-height: 42px;
+  box-shadow: none !important;
+
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-input .el-select__wrapper:hover {
+  border-color: #cbd5e1;
+}
+
+.form-input.is-focus .el-select__wrapper,
+.form-input .el-select__wrapper.is-focused {
+  border-color: #2563eb;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.1) !important;
+}
+
+.form-input .el-select__placeholder {
+  color: #9ca3af;
+}
+
+.form-input .el-select__selected-item {
+  color: #1e293b;
+}

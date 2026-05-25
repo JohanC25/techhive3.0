@@ -247,10 +247,10 @@
             </div>
             <div class="form-group">
               <label class="form-label">Categoría</label>
-              <select v-model="prodForm.category" class="form-input">
-                <option :value="null">Sin categoría</option>
-                <option v-for="c in categories" :key="c.id" :value="c.id">{{ c.name }}</option>
-              </select>
+              <el-select v-model="prodForm.category" class="form-input">
+                <el-option label="Sin categoría" :value="null" />
+                <el-option v-for="c in categories" :key="c.id" :value="c.id" :label="c.name"></el-option>
+              </el-select>
             </div>
             <div class="form-group">
               <label class="form-label">Código de barras *</label>
@@ -258,10 +258,10 @@
             </div>
             <div class="form-group">
               <label class="form-label">Percha</label>
-              <select v-model="prodForm.shelf" class="form-input">
-                <option :value="null">Sin percha</option>
-                <option v-for="s in shelves" :key="s.id" :value="s.id">{{ s.name }}</option>
-              </select>
+              <el-select v-model="prodForm.shelf" class="form-input">
+                <el-option :value="null">Sin percha</el-option>
+                <el-option v-for="s in shelves" :key="s.id" :value="s.id" :label="s.name"></el-option>
+              </el-select>
             </div>
             <div class="form-group">
               <label class="form-label">Descripción</label>

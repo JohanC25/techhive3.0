@@ -167,10 +167,10 @@
                   <tbody>
                     <tr v-for="(it, idx) in form.items" :key="idx">
                       <td>
-                        <select v-model="it.product" class="form-input form-input--sm" @change="onProductSelect(idx)">
-                          <option :value="null">— Libre —</option>
-                          <option v-for="p in products" :key="p.id" :value="p.id">{{ p.name }}</option>
-                        </select>
+                        <el-select v-model="it.product" filterable class="form-input form-input--sm" @change="onProductSelect(idx)">
+                          <el-option label="— Libre —" :value="null" />
+                          <el-option v-for="p in products" :key="p.id" :value="p.id" :label="p.name"></el-option>
+                        </el-select>
                       </td>
                       <td>
                         <input v-model="it.description" class="form-input form-input--sm" placeholder="Descripción..." required />
