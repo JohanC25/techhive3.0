@@ -2,10 +2,17 @@ from rest_framework import viewsets, filters
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from apps.core.permissions import IsNotClient
 from .models import Category, Shelf, Product
 from .serializers import CategorySerializer, ShelfSerializer, ProductSerializer
+
+
+class ProductPagination(PageNumberPagination):
+    page_size = 20
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
 
 
 class CategoryViewSet(viewsets.ModelViewSet):
@@ -26,6 +33,7 @@ class ShelfViewSet(viewsets.ModelViewSet):
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.select_related('category', 'shelf').all()
+    pagination_class = ProductPagination
     serializer_class = ProductSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'sku', 'description']
@@ -87,3 +95,4 @@ class ProductViewSet(viewsets.ModelViewSet):
             for p in qs
         ]
         return Response(data)
+
