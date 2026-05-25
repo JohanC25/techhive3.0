@@ -15,7 +15,6 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Tab') {
     e.preventDefault()
     e.stopPropagation()
-    console.log('CODE:', buffer)
 
     if (buffer.length > 0) {
       emit('scan', buffer)
