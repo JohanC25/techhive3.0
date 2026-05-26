@@ -9,12 +9,6 @@ from .models import Category, Shelf, Product
 from .serializers import CategorySerializer, ShelfSerializer, ProductSerializer
 
 
-class ProductPagination(PageNumberPagination):
-    page_size = 20
-    page_size_query_param = 'page_size'
-    max_page_size = 1000
-
-
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
@@ -33,7 +27,6 @@ class ShelfViewSet(viewsets.ModelViewSet):
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.select_related('category', 'shelf').all()
-    pagination_class = ProductPagination
     serializer_class = ProductSerializer
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['name', 'sku', 'description']
