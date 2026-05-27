@@ -247,7 +247,7 @@
             </div>
             <div class="form-group">
               <label class="form-label">Categoría</label>
-              <el-select v-model="prodForm.category" class="form-input">
+              <el-select v-model="prodForm.category" class="form-input" filterable>
                 <el-option label="Sin categoría" :value="null" />
                 <el-option v-for="c in categories" :key="c.id" :value="c.id" :label="c.name"></el-option>
               </el-select>
@@ -258,7 +258,7 @@
             </div>
             <div class="form-group">
               <label class="form-label">Percha</label>
-              <el-select v-model="prodForm.shelf" class="form-input">
+              <el-select v-model="prodForm.shelf" class="form-input" filterable>
                 <el-option :value="null">Sin percha</el-option>
                 <el-option v-for="s in shelves" :key="s.id" :value="s.id" :label="s.name"></el-option>
               </el-select>
@@ -410,8 +410,19 @@ async function loadData(page = 1) {
 
 async function loadCategories() {
   catLoading.value = true
-  try { const res = await api.get('/inventory/categories/'); categories.value = res.data.results ?? res.data }
-  catch { toast.error('Error al cargar categorías') } finally { catLoading.value = false }
+
+  try {
+    const res = await api.get('/inventory/categories/?page_size=200')
+
+    categories.value = Array.isArray(res.data)
+      ? res.data
+      : (res.data.results ?? [])
+
+  } catch {
+    toast.error('Error al cargar categorías')
+  } finally {
+    catLoading.value = false
+  }
 }
 
 function goPage(p: number) { loadData(p) }
@@ -462,8 +473,11 @@ async function deleteItem() {
 }
 
 async function loadShelves() {
-  const { data } = await api.get('/inventory/shelves/')
-  shelves.value = Array.isArray(data) ? data : (data.results ?? [])
+  const { data } = await api.get('/inventory/shelves/?page_size=200')
+
+  shelves.value = Array.isArray(data)
+    ? data
+    : (data.results ?? [])
 }
 
 function openCreateShelf() {
