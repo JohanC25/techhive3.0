@@ -268,7 +268,7 @@ const donutSegments = computed(() => {
 
 function setPreset(preset: 'month' | 'quarter' | 'year') {
   const now = new Date()
-  const fmt = (d: Date) => d.toISOString().split('T')[0]
+  const fmt = (d: Date) => hoyEcuador()
   if (preset === 'month') {
     filters.value.fecha_inicio = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
     filters.value.fecha_fin = fmt(now)
@@ -352,6 +352,20 @@ const categoryLabels: Record<string, string> = {
   rent: 'Arriendo', utility: 'Servicios básicos', other: 'Otro',
 }
 function labelCategory(v: string) { return categoryLabels[v] ?? v }
+
+function hoyEcuador() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guayaquil',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value
+
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
 
 onMounted(() => {
   setPreset('month')

@@ -28,6 +28,27 @@ class CashSession(models.Model):
 
 
 class CashMovement(models.Model):
+    # Relaciones de origen para movimientos generados automáticamente.
+    # Son opcionales para conservar los movimientos manuales e históricos.
+    sale = models.OneToOneField(
+        'sales.Venta',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='cash_movement',
+        editable=False,
+        verbose_name='Venta de origen',
+    )
+    purchase = models.OneToOneField(
+        'purchases.Purchase',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='cash_movement',
+        editable=False,
+        verbose_name='Compra de origen',
+    )
+
     TYPE_CHOICES = [
         ('income', 'Ingreso'),
         ('expense', 'Egreso'),

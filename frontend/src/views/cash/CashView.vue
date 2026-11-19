@@ -233,7 +233,7 @@ const categoryOpts = [
   { value: 'other', label: 'Otro' },
 ]
 
-const emptyForm = () => ({ type: 'income', category: 'other', description: '', amount: 0, date: new Date().toISOString().split('T')[0], notes: '' })
+const emptyForm = () => ({ type: 'income', category: 'other', description: '', amount: 0, date: hoyEcuador(), notes: '' })
 const form = ref(emptyForm())
 
 const paginationText = computed(() => {
@@ -290,7 +290,7 @@ async function openSession() {
   savingSession.value = true
   try {
     const { data } = await api.post('/cash/sessions/', {
-      date: new Date().toISOString().split('T')[0],
+      date: hoyEcuador(),
       opening_amount: parseFloat(sessionAmount.value),
     })
     session.value = data
@@ -325,6 +325,20 @@ async function deleteItem() {
 }
 filters.value.fecha_inicio = new Date().toLocaleDateString('en-CA');
 filters.value.fecha_fin = new Date().toLocaleDateString('en-CA');
+
+function hoyEcuador() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guayaquil',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value
+
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
 
 onMounted(() => { checkSession(); loadData() })
 </script>
