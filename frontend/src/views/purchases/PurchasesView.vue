@@ -224,7 +224,7 @@ const showModal = ref(false); const showConfirm = ref(false)
 const editingItem = ref<any>(null); const deletingItem = ref<any>(null)
 const formError = ref('')
 
-const emptyPur = () => ({ supplier: null as number | null, date: new Date().toISOString().split('T')[0], status: 'pending', notes: '', items: [] as PurchaseItem[] })
+const emptyPur = () => ({ supplier: null as number | null, date: hoyEcuador(), status: 'pending', notes: '', items: [] as PurchaseItem[] })
 const emptySup = () => ({ name: '', ruc: '', email: '', phone: '', address: '', is_active: true })
 const purForm = ref(emptyPur())
 const supForm = ref(emptySup())
@@ -312,6 +312,20 @@ async function deleteItem() {
 }
 filters.value.fecha_inicio = new Date().toLocaleDateString('en-CA');
 filters.value.fecha_fin = new Date().toLocaleDateString('en-CA');
+
+function hoyEcuador() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guayaquil',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value
+
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
 
 onMounted(async () => { await loadSuppliers(); loadData() })
 </script>

@@ -50,6 +50,7 @@ class VentaSerializer(serializers.ModelSerializer):
         try:
             from apps.modules.cash_management.models import CashMovement
             CashMovement.objects.create(
+                sale=venta,
                 type='income',
                 category='sale',
                 description=f'Venta #{venta.id}',

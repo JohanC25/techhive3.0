@@ -61,7 +61,21 @@
           <tr v-for="item in items" :key="item.id">
             <td class="font-mono">{{ item.fecha_venta }}</td>
             <td>{{ item.client_name || '—' }}</td>
-            <td class="text-center">{{ item.items?.length ?? 0 }}</td>
+            <!--<td class="text-center">{{ item.items?.length ?? 0 }}</td>-->
+            <td class="text-center">
+              <button
+                class="btn-icon btn-view"
+                @click="openDetails(item)"
+                title="Ver ítems vendidos"
+                aria-label="Ver ítems vendidos"
+              >
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M2.458 12C3.732 7.943 7.523 5 12 5s8.268 2.943 9.542 7c-1.274 4.057-5.065 7-9.542 7S3.732 16.057 2.458 12z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+              </button>
+            </td>
             <td class="text-right font-semibold">{{ fmt(item.total) }}</td>
             <td><span class="badge badge-blue">{{ labelMetodo(item.metodo_pago) }}</span></td>
             <td class="text-center">
@@ -210,6 +224,67 @@
         </div>
       </div>
 
+      <!-- Ver ítems vendidos -->
+      <div v-if="showDetails" class="modal-overlay" @click.self="showDetails = false">
+        <div class="modal modal-wide sale-details-modal">
+          <div class="modal-header">
+            <div>
+              <h3 class="modal-title">Ítems vendidos</h3>
+              <p class="view-sub">
+                Venta del {{ selectedSale?.fecha_venta }} ·
+                {{ fmt(selectedSale?.total ?? 0) }}
+              </p>
+            </div>
+            <button class="modal-close" @click="showDetails = false">✕</button>
+          </div>
+
+          <div class="sale-details-section">
+            <div
+              v-if="!selectedSale?.items?.length"
+              class="items-empty"
+            >
+              Esta venta no tiene ítems registrados.
+            </div>
+
+            <div v-else class="items-table-wrapper">
+              <table class="items-table">
+                <thead>
+                  <tr>
+                    <th>Descripción</th>
+                    <th style="width:90px">Cantidad</th>
+                    <th style="width:130px">Precio unit.</th>
+                    <th style="width:120px">Subtotal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(saleItem, index) in selectedSale.items"
+                    :key="saleItem.id ?? index"
+                  >
+                    <td>{{ saleItem.description }}</td>
+                    <td>{{ saleItem.quantity }}</td>
+                    <td>{{ fmt(saleItem.unit_price) }}</td>
+                    <td class="subtotal-cell">{{ fmt(saleItem.subtotal) }}</td>
+                  </tr>
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td colspan="3" class="total-label">Total</td>
+                    <td class="total-value">{{ fmt(selectedSale.total) }}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <button class="btn-secondary" @click="showDetails = false">
+              Cerrar
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Confirm delete -->
       <div v-if="showConfirm" class="modal-overlay" @click.self="showConfirm = false">
         <div class="modal modal-sm">
@@ -304,7 +379,7 @@ const metodoPagoOpts = [
 ]
 
 const emptyForm = () => ({
-  fecha_venta: new Date().toISOString().split('T')[0],
+  fecha_venta: hoyEcuador(),
   metodo_pago: 'efectivo',
   client: null as number | null,
   es_feriado: false,
@@ -497,6 +572,28 @@ function onScan(code: string) {
 
 filters.value.fecha_inicio = new Date().toLocaleDateString('en-CA');
 filters.value.fecha_fin = new Date().toLocaleDateString('en-CA');
+
+const showDetails = ref(false)
+const selectedSale = ref<Venta | null>(null)
+
+function openDetails(item: Venta) {
+  selectedSale.value = item
+  showDetails.value = true
+}
+
+function hoyEcuador() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Guayaquil',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date())
+
+  const get = (type: string) =>
+    parts.find((part) => part.type === type)?.value
+
+  return `${get('year')}-${get('month')}-${get('day')}`
+}
 
 onMounted(() => {
   loadData()

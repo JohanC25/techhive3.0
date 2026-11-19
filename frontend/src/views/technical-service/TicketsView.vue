@@ -68,6 +68,9 @@
             <td class="font-mono">{{ item.received_at }}</td>
             <td class="text-center">
               <div class="row-actions">
+                <button class="btn-icon btn-print" @click="openReceipt(item)" title="Imprimir recepción" aria-label="Imprimir recepción">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2m-2 0v4H8v-4h8z"/></svg>
+                </button>
                 <button class="btn-icon btn-edit" @click="openEdit(item)">
                   <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                 </button>
@@ -173,6 +176,88 @@
         </div>
       </div>
 
+      <!-- Comprobante de recepción -->
+      <div v-if="showReceipt && receiptTicket" class="modal-overlay" @click.self="closeReceipt">
+        <div class="modal receipt-modal">
+          <div class="modal-header">
+            <h3 class="modal-title">Comprobante de recepción</h3>
+            <button class="modal-close" @click="closeReceipt">✕</button>
+          </div>
+
+          <div class="receipt-preview">
+            <div class="receipt-heading">
+              <div>
+                <p class="receipt-kicker">SERVICIO TÉCNICO</p>
+                <h2>Comprobante de recepción</h2>
+              </div>
+              <div class="receipt-number">Ticket #{{ receiptTicket.id }}</div>
+            </div>
+
+            <div class="receipt-grid">
+              <div><span>Cliente</span><strong>{{ receiptTicket.client_name }}</strong></div>
+              <div><span>Teléfono</span><strong>{{ receiptTicket.client_phone || '—' }}</strong></div>
+              <div><span>Fecha de recepción</span><strong>{{ receiptTicket.received_at }}</strong></div>
+              <div><span>Fecha prometida</span><strong>{{ receiptTicket.promised_at || 'Por confirmar' }}</strong></div>
+            </div>
+
+            <div class="receipt-section">
+              <span>Equipo / dispositivo</span>
+              <strong>{{ receiptTicket.device }}</strong>
+              <p v-if="receiptTicket.serial_number">N.º de serie: {{ receiptTicket.serial_number }}</p>
+            </div>
+            <div class="receipt-section">
+              <span>Accesorios entregados</span>
+              <p>{{ receiptTicket.accessories || 'No se registraron accesorios.' }}</p>
+            </div>
+            <div class="receipt-section">
+              <span>Problema reportado</span>
+              <p>{{ receiptTicket.problem }}</p>
+            </div>
+            <div v-if="receiptTicket.estimated_cost !== null" class="receipt-estimate">
+              Costo estimado: <strong>{{ fmt(receiptTicket.estimated_cost) }}</strong>
+            </div>
+
+            <p class="receipt-note">El equipo se recibe en las condiciones descritas. El diagnóstico y el costo final serán comunicados antes de realizar reparaciones no autorizadas.</p>
+
+            <div class="receipt-signatures">
+              <div><span>Firma del cliente</span></div>
+              <div><span>Recibido por</span></div>
+            </div>
+          </div>
+
+          <div class="modal-footer receipt-actions">
+            <button type="button" class="btn-secondary" @click="closeReceipt">
+              Cerrar
+            </button>
+
+            <button
+              type="button"
+              class="btn-primary"
+              @click="printReceipt('a5')"
+            >
+              <icon-placeholder />
+              Imprimir A5
+            </button>
+
+            <button
+              type="button"
+              class="btn-secondary"
+              @click="printReceipt('thermal-80')"
+            >
+              Ticket 80 mm
+            </button>
+
+            <button
+              type="button"
+              class="btn-secondary"
+              @click="printReceipt('thermal-58')"
+            >
+              Ticket 58 mm
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Quick create client modal -->
       <div v-if="showClientModal" class="modal-overlay" @click.self="showClientModal = false">
         <div class="modal" style="max-width:480px">
@@ -242,8 +327,9 @@ const count = ref(0); const nextUrl = ref<string | null>(null); const prevUrl = 
 const currentPage = ref(1)
 const tableLoading = ref(false); const saving = ref(false); const savingClient = ref(false)
 const search = ref(''); const filters = ref({ status: '', priority: '' })
-const showModal = ref(false); const showConfirm = ref(false); const showClientModal = ref(false)
+const showModal = ref(false); const showConfirm = ref(false); const showClientModal = ref(false); const showReceipt = ref(false)
 const editingItem = ref<Ticket | null>(null); const deletingItem = ref<Ticket | null>(null)
+const receiptTicket = ref<Ticket | null>(null)
 const formError = ref(''); const clientFormError = ref('')
 
 const statusOpts = [
@@ -341,6 +427,389 @@ function openEdit(item: Ticket) {
 }
 function closeModal() { showModal.value = false }
 function confirmDelete(item: Ticket) { deletingItem.value = item; showConfirm.value = true }
+function openReceipt(ticket: Ticket) { receiptTicket.value = ticket; showReceipt.value = true }
+function closeReceipt() { showReceipt.value = false; receiptTicket.value = null }
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;',
+  }[character] ?? character))
+}
+
+type ReceiptFormat = 'a5' | 'thermal-80' | 'thermal-58'
+
+function formatReceiptDate(value?: string | null): string {
+  if (!value) return '—'
+
+  const datePart = value.substring(0, 10)
+  const parts = datePart.split('-')
+
+  if (parts.length !== 3) return value
+
+  const [year, month, day] = parts
+  return `${day}/${month}/${year}`
+}
+
+function printReceipt(format: ReceiptFormat = 'a5') {
+  const ticket = receiptTicket.value
+
+  if (!ticket) return
+
+  const receiptWindow = window.open('', '_blank', 'width=900,height=700')
+
+  if (!receiptWindow) {
+    toast.error('El navegador bloqueó la ventana de impresión. Permite las ventanas emergentes e inténtalo nuevamente.')
+    return
+  }
+
+  const escape = (value?: string | null) =>
+    escapeHtml(value?.trim() || '—')
+
+  const receivedDate = formatReceiptDate(ticket.received_at)
+  const promisedDate = formatReceiptDate(ticket.promised_at)
+
+  const estimatedCost = ticket.estimated_cost !== null
+    ? `<div class="cost-row">
+         <span>Costo estimado:</span>
+         <strong>${fmt(ticket.estimated_cost)}</strong>
+       </div>`
+    : ''
+
+  const isA5 = format === 'a5'
+  const is80 = format === 'thermal-80'
+
+  const pageStyle = isA5
+    ? `
+      @page {
+        size: A5 landscape;
+        margin: 5mm;
+      }
+
+      body {
+        width: 200mm;
+        min-height: 138mm;
+        font-size: 10px;
+      }
+
+      .receipt {
+        width: 100%;
+      }
+
+      .company-name {
+        font-size: 25px;
+      }
+
+      .section-title {
+        font-size: 10px;
+      }
+
+      .signatures {
+        margin-top: 18mm;
+      }
+    `
+    : `
+      @page {
+        size: ${is80 ? '80mm' : '58mm'} auto;
+        margin: 3mm;
+      }
+
+      body {
+        width: ${is80 ? '74mm' : '52mm'};
+        font-size: ${is80 ? '11px' : '10px'};
+      }
+
+      .company-header {
+        text-align: center;
+        display: block;
+      }
+
+      .company-name {
+        font-size: ${is80 ? '19px' : '16px'};
+      }
+
+      .company-info {
+        text-align: center;
+        margin-top: 5px;
+      }
+
+      .order-number {
+        margin-top: 10px;
+        text-align: center;
+      }
+
+      .data-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .signatures {
+        margin-top: 30px;
+      }
+    `
+
+  const html = `
+    <!DOCTYPE html>
+    <html lang="es">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1">
+      <title>Orden de trabajo #${ticket.id}</title>
+
+      <style>
+        * {
+          box-sizing: border-box;
+        }
+
+        body {
+          margin: 0 auto;
+          padding: 0;
+          color: #000;
+          font-family: Arial, Helvetica, sans-serif;
+        }
+
+        .receipt {
+          width: 100%;
+        }
+
+        .company-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          border-bottom: 1.5px solid #000;
+          padding-bottom: 8px;
+        }
+
+        .company-name {
+          color: #c62828;
+          font-weight: 900;
+          margin: 0;
+          font-family: Georgia, serif;
+        }
+
+        .company-info {
+          font-size: 9px;
+          line-height: 1.5;
+          font-weight: 600;
+          text-align: right;
+        }
+
+        .order-number {
+          text-align: center;
+          font-size: 17px;
+          font-weight: 800;
+          margin: 9px 0;
+        }
+
+        .data-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr 1fr;
+          gap: 8px 15px;
+          margin-bottom: 10px;
+        }
+
+        .field {
+          border-bottom: 1px solid #000;
+          min-height: 22px;
+          padding-bottom: 3px;
+        }
+
+        .field-label {
+          font-weight: 700;
+          font-size: 9px;
+          display: block;
+          margin-bottom: 3px;
+        }
+
+        .field-value {
+          font-size: 11px;
+          font-weight: 600;
+          overflow-wrap: anywhere;
+        }
+
+        .section-title {
+          font-weight: 800;
+          margin: 10px 0 5px;
+          text-transform: uppercase;
+        }
+
+        .equipment-grid {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 8px;
+        }
+
+        .content-box {
+          border-bottom: 1px solid #000;
+          padding: 5px 0;
+          min-height: 27px;
+          white-space: pre-wrap;
+          overflow-wrap: anywhere;
+        }
+
+        .content-label {
+          display: block;
+          font-size: 9px;
+          font-weight: 700;
+          margin-bottom: 4px;
+        }
+
+        .content-value {
+          font-size: 11px;
+        }
+
+        .cost-row {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 8px;
+          font-weight: 700;
+        }
+
+        .conditions {
+          margin-top: 10px;
+          font-size: 9px;
+          line-height: 1.4;
+        }
+
+        .conditions strong {
+          display: block;
+          margin-bottom: 4px;
+        }
+
+        .signatures {
+          display: grid;
+          grid-template-columns: 1fr 1fr;
+          gap: 25px;
+        }
+
+        .signature {
+          border-top: 1px solid #000;
+          padding-top: 5px;
+          text-align: center;
+          font-size: 9px;
+          font-weight: 700;
+        }
+
+        .thermal-divider {
+          border-top: 1px dashed #000;
+          margin: 8px 0;
+        }
+
+        .thermal-section {
+          margin-top: 8px;
+          overflow-wrap: anywhere;
+        }
+
+        .thermal-label {
+          font-weight: 700;
+          display: block;
+          margin-bottom: 3px;
+        }
+
+        @media print {
+          body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+        }
+
+        ${pageStyle}
+      </style>
+    </head>
+
+    <body>
+      <div class="receipt">
+
+        <header class="company-header">
+          <h1 class="company-name">Magic World Computers</h1>
+
+          <div class="company-info">
+            Dirección: Tomás de Berlanga E8-43 y Av. Shyris<br>
+            Teléfono: 6008553<br>
+            Email: vero_meneses@hotmail.com
+          </div>
+        </header>
+
+        <div class="order-number">
+          ORDEN DE TRABAJO No. ${ticket.id}
+        </div>
+
+        <div class="data-grid">
+          <div class="field">
+            <span class="field-label">Cliente:</span>
+            <span class="field-value">${escape(ticket.client_name)}</span>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Teléfono:</span>
+            <span class="field-value">${escape(ticket.client_phone)}</span>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Fecha recepción:</span>
+            <span class="field-value">${receivedDate}</span>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Equipo:</span>
+            <span class="field-value">${escape(ticket.device)}</span>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Número de serie:</span>
+            <span class="field-value">${escape(ticket.serial_number)}</span>
+          </div>
+
+          <div class="field">
+            <span class="field-label">Fecha prometida:</span>
+            <span class="field-value">${promisedDate}</span>
+          </div>
+        </div>
+
+        <div class="section-title">Accesorios entregados:</div>
+
+        <div class="content-box">
+          <span class="content-value">${escape(ticket.accessories)}</span>
+        </div>
+
+        <div class="section-title">Problema reportado:</div>
+
+        <div class="content-box">
+          <span class="content-value">${escape(ticket.problem)}</span>
+        </div>
+
+        ${estimatedCost}
+
+        <div class="conditions">
+          <strong>IMPORTANTE:</strong>
+          El equipo se recibe para diagnóstico y/o servicio técnico.
+          Cualquier reparación adicional será comunicada al cliente
+          antes de realizarse.
+        </div>
+
+        <div class="signatures">
+          <div class="signature">FIRMA DEL CLIENTE</div>
+          <div class="signature">RECIBIDO POR</div>
+        </div>
+
+      </div>
+
+      <script>
+        window.onload = () => {
+          window.focus();
+          window.print();
+        };
+
+        window.onafterprint = () => {
+          window.close();
+        };
+      <\/script>
+    </body>
+    </html>
+  `
+
+  receiptWindow.document.open()
+  receiptWindow.document.write(html)
+  receiptWindow.document.close()
+}
 
 function openCreateClient() {
   clientForm.value = emptyClientForm(); clientFormError.value = ''; showClientModal.value = true
@@ -369,7 +838,8 @@ async function saveItem() {
       await api.put(`/technical-service/tickets/${editingItem.value.id}/`, form.value)
       toast.success('Ticket actualizado')
     } else {
-      await api.post('/technical-service/tickets/', form.value)
+      const response = await api.post('/technical-service/tickets/', form.value)
+      openReceipt(response.data)
       toast.success('Ticket creado')
     }
     closeModal(); loadData(currentPage.value)
@@ -405,4 +875,27 @@ onMounted(() => { loadData(); loadClients() })
 .sc-cancelled     { border-left: 3px solid #dc2626; }
 .form-section-title { font-size: 13px; font-weight: 700; color: #2563eb; text-transform: uppercase; letter-spacing: 0.05em; padding-bottom: 4px; border-bottom: 1px solid #e2e8f0; margin-top: 4px; }
 .client-info-box { display: flex; gap: 16px; flex-wrap: wrap; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px 14px; font-size: 13px; color: #475569; margin-top: -4px; }
+.btn-print { background: #ecfdf5; color: #059669; }
+.btn-print:hover { background: #d1fae5; }
+.receipt-modal { max-width: 680px; }
+.receipt-preview { margin: 16px 24px; color: #0f172a; }
+.receipt-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 2px solid #2563eb; padding-bottom: 14px; }
+.receipt-heading h2 { margin: 0; font-size: 20px; }
+.receipt-kicker { margin: 0 0 5px; color: #2563eb; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+.receipt-number { color: #2563eb; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.receipt-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 20px; margin: 18px 0; }
+.receipt-grid span, .receipt-section > span { display: block; color: #64748b; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.receipt-grid strong { display: block; margin-top: 4px; color: #374151; font-size: 14px; }
+.receipt-section { margin-top: 10px; padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px; }
+.receipt-section strong { display: block; margin-top: 5px; }
+.receipt-section p { margin: 6px 0 0; color: #374151; line-height: 1.45; white-space: pre-wrap; }
+.receipt-estimate { margin-top: 14px; color: #374151; font-size: 14px; text-align: right; }
+.receipt-estimate strong { color: #2563eb; font-size: 16px; }
+.receipt-note { margin: 22px 0 0; color: #64748b; font-size: 12px; line-height: 1.5; }
+.receipt-signatures { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; margin-top: 52px; }
+.receipt-signatures div { border-top: 1px solid #64748b; padding-top: 7px; color: #64748b; font-size: 12px; text-align: center; }
+.receipt-actions { padding: 0 24px 24px; }
+.receipt-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+.receipt-modal { max-width: 850px; }
+@media (max-width: 560px) { .receipt-grid { grid-template-columns: 1fr; } .receipt-signatures { gap: 18px; } }
 </style>
